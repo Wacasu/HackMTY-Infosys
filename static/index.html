@@ -22,7 +22,7 @@
                 --stroke: #2a3340;
                 --text: #e7ecf3;
                 --muted: #8b97a8;
-                --greedy: #e08a3c;
+                --greedy: #d45d5d;
                 --smart: #3db8a0;
                 --danger: #d45d5d;
                 --ok: #6dbf7a;
@@ -459,7 +459,7 @@
             }
 
             .driver-marker.greedy {
-                background: #e08a3c;
+                background: #d45d5d;
             }
 
             .driver-marker.smart {
@@ -483,7 +483,7 @@
                 to {
                     transform: scale(1.14);
                     box-shadow:
-                        0 0 0 8px rgba(224, 138, 60, 0.24),
+                        0 0 0 8px rgba(212, 93, 93, 0.24),
                         0 2px 12px rgba(0, 0, 0, 0.7);
                 }
             }
@@ -517,10 +517,10 @@
             }
 
             .money-float.greedy {
-                color: #f0a43c;
+                color: #d45d5d;
                 text-shadow:
                     0 1px 4px rgba(0, 0, 0, 0.85),
-                    0 0 10px rgba(240, 164, 60, 0.35);
+                    0 0 10px rgba(212, 93, 93, 0.35);
             }
 
             @keyframes money-rise {
@@ -1445,7 +1445,7 @@
                 state.layers.routes.forEach((l) => map.removeLayer(l));
                 state.layers.routes = [];
                 [
-                    ["greedy", "#e08a3c"],
+                    ["greedy", "#d45d5d"],
                     ["smart", "#3db8a0"],
                 ].forEach(([key, color]) => {
                     const route = state.agents[key].route;
@@ -1675,7 +1675,7 @@
                 const h = canvas.height;
                 ctx.clearRect(0, 0, w, h);
                 const series = [
-                    { data: state.history.greedy, color: "#e08a3c" },
+                    { data: state.history.greedy, color: "#d45d5d" },
                     { data: state.history.smart, color: "#3db8a0" },
                 ];
                 const all = series.flatMap((s) => s.data);
