@@ -42,7 +42,9 @@ MIN_TIME_WINDOW_SLACK_SEC = 600
 MAX_TIME_WINDOW_SLACK_SEC = 2400
 
 EARTH_RADIUS_KM = 6371.0
-CENTRO_MONTERREY_BOUNDS = (25.650, 25.695, -100.345, -100.285)
+# Area metropolitana de Monterrey: Monterrey, San Pedro, Santa Catarina,
+# Guadalupe y Apodaca. Las coordenadas se proyectan despues a calles reales.
+METRO_MONTERREY_BOUNDS = (25.570, 25.810, -100.520, -100.150)
 
 
 def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -108,20 +110,32 @@ class OrderGenerator:
             pickup_node = await graph_provider.nearest_node(
                 record["pickup_lat"], record["pickup_lon"]
             )
+            pickup_lat, pickup_lon = graph_provider.node_coordinates(
+                pickup_node)
+            record["pickup_lat"] = pickup_lat
+            record["pickup_lon"] = pickup_lon
             dropoff_node = await graph_provider.nearest_node(
                 record["dropoff_lat"], record["dropoff_lon"]
             )
+            dropoff_lat, dropoff_lon = graph_provider.node_coordinates(
+                dropoff_node)
+            record["dropoff_lat"] = dropoff_lat
+            record["dropoff_lon"] = dropoff_lon
 
             # Si el sorteo aleatorio coloca pickup y dropoff en el mismo
             # nodo (áreas urbanas densas), forzamos una separación mínima
             # re-muestreando el dropoff para que el pedido tenga sentido.
             attempts = 0
             while dropoff_node == pickup_node and attempts < 5:
-                record["dropoff_lat"], record["dropoff_lon"] = self._random_point_in_center(
+                record["dropoff_lat"], record["dropoff_lon"] = self._random_point_in_metro(
                     rng)
                 dropoff_node = await graph_provider.nearest_node(
                     record["dropoff_lat"], record["dropoff_lon"]
                 )
+                dropoff_lat, dropoff_lon = graph_provider.node_coordinates(
+                    dropoff_node)
+                record["dropoff_lat"] = dropoff_lat
+                record["dropoff_lon"] = dropoff_lon
                 attempts += 1
 
             straight_line_km = _haversine_km(
@@ -160,8 +174,8 @@ class OrderGenerator:
         )
 
     @staticmethod
-    def _random_point_in_center(rng: random.Random) -> tuple[float, float]:
-        min_lat, max_lat, min_lon, max_lon = CENTRO_MONTERREY_BOUNDS
+    def _random_point_in_metro(rng: random.Random) -> tuple[float, float]:
+        min_lat, max_lat, min_lon, max_lon = METRO_MONTERREY_BOUNDS
         lat = rng.uniform(min_lat, max_lat)
         lon = rng.uniform(min_lon, max_lon)
         return lat, lon
@@ -175,11 +189,21 @@ class OrderGenerator:
         bounding box de Monterrey."""
         records: List[dict] = []
         for order_id in range(1, num_orders + 1):
-            pickup_lat, pickup_lon = self._random_point_in_center(rng)
-            dropoff_lat, dropoff_lon = self._random_point_in_center(rng)
+            pickup_lat, pickup_lon = self._random_point_in_metro(rng)
+            dropoff_lat, dropoff_lon = self._random_point_in_metro(rng)
 
-            ready_time_sec = rng.randint(
-                0, max(self.shift_duration_sec - 1800, 0))
+            release_horizon_sec = max(self.shift_duration_sec - 300, 0)
+            if num_orders == 1:
+                ready_time_sec = 0
+            else:
+                release_position = (order_id - 1) / (num_orders - 1)
+                jitter_sec = rng.randint(-30, 30)
+                ready_time_sec = int(
+                    max(0, min(
+                        release_horizon_sec,
+                        release_position * release_horizon_sec + jitter_sec,
+                    ))
+                )
             window_slack = rng.randint(
                 MIN_TIME_WINDOW_SLACK_SEC, MAX_TIME_WINDOW_SLACK_SEC
             )

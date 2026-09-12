@@ -26,7 +26,7 @@ logger = logging.getLogger("the_courier.greedy_agent")
 # Umbral mínimo de pago por minuto de viaje (MXN/min) para aceptar una
 # oferta. Por debajo de este umbral el pedido "no vale la pena" incluso para
 # un agente que ignora el riesgo.
-MIN_ACCEPTABLE_MXN_PER_MINUTE = 3.0
+MIN_ACCEPTABLE_MXN_PER_MINUTE = 2.0
 
 # Piso de tiempo (segundos) usado para evitar divisiones por cero cuando el
 # pickup y el dropoff están extremadamente cerca en la malla vial.

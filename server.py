@@ -41,7 +41,6 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
-from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, ValidationError
 
 from agent_interface import AgentDecision, BaseAgent, DriverState, Offer, ShiftState, WeatherEvent
@@ -196,6 +195,9 @@ class ShiftSimulatorEngine:
         self._seen_order_ids: set[int] = set()
         self._current_order: Optional[Offer] = None
         self._remaining_time_sec: float = 0.0
+        self._route_travel_sec: float = 0.0
+        self._route_elapsed_sec: float = 0.0
+        self._route_nodes: List[int] = []
         self._current_route: List[dict] = []
         self._recent_decisions: List[AgentDecision] = []
 
@@ -217,18 +219,25 @@ class ShiftSimulatorEngine:
     async def _tick(self, elapsed_sec: int) -> dict:
         shift_state = self._current_shift_state(elapsed_sec)
 
+        pending_order_ids = []
         for order_dict in self._order_generator.get_pending_orders(elapsed_sec):
             order_id = order_dict["order_id"]
             if order_id in self._seen_order_ids:
                 continue
             self._seen_order_ids.add(order_id)
-            await self._evaluate_new_offer(order_id, shift_state)
+            pending_order_ids.append(order_id)
+        if pending_order_ids:
+            await asyncio.gather(*(
+                self._evaluate_new_offer(order_id, shift_state)
+                for order_id in pending_order_ids
+            ))
 
         if self._current_order is None and self.driver_state.active_orders:
             await self._advance_route_plan()
 
         if self._current_order is not None:
             self._remaining_time_sec -= self._config.tick_interval_sec
+            self._advance_visual_position(self._config.tick_interval_sec)
             if self._remaining_time_sec <= 0:
                 self._complete_current_order()
 
@@ -279,9 +288,6 @@ class ShiftSimulatorEngine:
 
     async def _advance_route_plan(self) -> None:
         active_orders = self.driver_state.active_orders
-        if isinstance(self.agent, RiskAverseAgent):
-            await self.agent.prepare_route_matrix(self.driver_state, active_orders)
-
         order_sequence = await asyncio.to_thread(
             self.agent.plan_route, self.driver_state, active_orders
         )
@@ -304,13 +310,16 @@ class ShiftSimulatorEngine:
             offer.pickup_node, offer.dropoff_node
         )
         route_nodes = pickup_path + dropoff_path[1:]
+        route_coordinates = await self._graph_provider.route_coordinates(route_nodes)
         self._current_route = [
-            {
-                "lat": self._graph_provider.node_coordinates(node_id)[0],
-                "lon": self._graph_provider.node_coordinates(node_id)[1],
-            }
-            for node_id in route_nodes
+            {"lat": latitude, "lon": longitude}
+            for latitude, longitude in route_coordinates
         ]
+        self._route_nodes = list(route_nodes)
+        self._route_travel_sec = max(
+            travel_to_pickup_sec + travel_to_dropoff_sec, 0.0
+        )
+        self._route_elapsed_sec = 0.0
 
         self._current_order = offer
         self._remaining_time_sec = (
@@ -334,7 +343,23 @@ class ShiftSimulatorEngine:
         ]
         self._current_order = None
         self._remaining_time_sec = 0.0
+        self._route_travel_sec = 0.0
+        self._route_elapsed_sec = 0.0
+        self._route_nodes = []
         self._current_route = []
+
+    def _advance_visual_position(self, elapsed_sec: float) -> None:
+        if not self._route_nodes or self._route_travel_sec <= 0:
+            return
+        self._route_elapsed_sec = min(
+            self._route_elapsed_sec + elapsed_sec, self._route_travel_sec
+        )
+        progress = self._route_elapsed_sec / self._route_travel_sec
+        route_index = min(
+            int(progress * (len(self._route_nodes) - 1)),
+            len(self._route_nodes) - 1,
+        )
+        self.driver_state.current_node = self._route_nodes[route_index]
 
     def _build_snapshot(self, shift_state: ShiftState, shift_ended: bool) -> dict:
         driver_lat, driver_lon = self._graph_provider.node_coordinates(
@@ -526,11 +551,25 @@ async def shift_simulation_ws(websocket: WebSocket) -> None:
 
     async def forward_snapshots_to_client() -> None:
         finished_agents = 0
+        pending_ticks: dict[tuple[int, str], dict[str, dict]] = {}
         while finished_agents < 2:
             snapshot = await snapshot_queue.get()
-            await websocket.send_json(snapshot)
             if snapshot.get("type") == "agent_finished":
                 finished_agents += 1
+                continue
+
+            shift_state = snapshot.get("shift_state", {})
+            tick_key = (
+                int(shift_state.get("elapsed_sec", 0)),
+                snapshot.get("type", "tick"),
+            )
+            tick_snapshots = pending_ticks.setdefault(tick_key, {})
+            tick_snapshots[snapshot["agent_name"]] = snapshot
+
+            if len(tick_snapshots) == 2:
+                for agent_name in ("greedy_base", "risk_averse_smart"):
+                    await websocket.send_json(tick_snapshots[agent_name])
+                del pending_ticks[tick_key]
         await websocket.send_json({"type": "session_complete", "session_id": session_id})
 
     async def listen_for_client_commands() -> None:
@@ -567,7 +606,7 @@ async def shift_simulation_ws(websocket: WebSocket) -> None:
 
     all_tasks = producer_tasks + [forwarding_task, command_task]
     try:
-        done, pending = await asyncio.wait(all_tasks, return_when=asyncio.FIRST_COMPLETED)
+        done, _pending = await asyncio.wait(all_tasks, return_when=asyncio.FIRST_COMPLETED)
         for task in done:
             exception = task.exception()
             if exception is not None and not isinstance(exception, WebSocketDisconnect):
