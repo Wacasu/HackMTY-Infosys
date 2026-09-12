@@ -65,6 +65,28 @@ class DriverState(BaseModel):
     timeouts_incurred: int = 0
     active_orders: List[Offer] = Field(default_factory=list)
 
+    # --- KPIs de seguridad / impacto de negocio -------------------------
+    # Acumulados a lo largo del turno por el motor de simulación
+    # (`server.py`), a partir de lo que reporta cada `AgentDecision`. Son
+    # la base numérica para justificar el modelo adverso al riesgo: cuánto
+    # riesgo aceptó en promedio, y cuántos pedidos rechazó específicamente
+    # por el límite duro de seguridad (proxy de "incidentes potenciales
+    # evitados"), sin importar el pago ofrecido.
+    accepted_risk_sum: float = Field(
+        0.0, description="Suma de `estimated_risk` de cada oferta ACEPTADA")
+    accepted_risk_count: int = Field(
+        0, description="Cuántas ofertas aceptadas incluyeron `estimated_risk` "
+        "(promedio = accepted_risk_sum / accepted_risk_count)")
+    safety_rejections: int = Field(
+        0, description="Ofertas rechazadas por superar el límite duro de "
+        "riesgo (`hard_safety_violation`), sin importar el pago ofrecido -- "
+        "0 siempre para un agente que no evalúa riesgo (p. ej. Greedy)")
+    risky_orders_accepted: int = Field(
+        0, description="Ofertas ACEPTADAS que superan `SAFETY_HARD_RISK_LIMIT` "
+        "(`exceeds_safety_threshold`) -- para Greedy, cuenta cuántos viajes "
+        "de alto riesgo tomó igual por ser ciego al riesgo; para el agente "
+        "adverso al riesgo debería quedarse en 0 (los rechaza en cambio)")
+
 
 class ShiftState(BaseModel):
     """Estado global del turno: condiciones ambientales compartidas por
@@ -93,6 +115,35 @@ class AgentDecision(BaseModel):
     net_profit_estimate_mxn: Optional[float] = None
     reasoning: str
     timed_out: bool = False
+    hard_safety_violation: bool = Field(
+        False,
+        description=(
+            "True cuando el rechazo fue por el límite duro de seguridad "
+            "(riesgo de ruta demasiado alto), sin importar el pago "
+            "ofrecido -- distinto de un rechazo por rentabilidad. Un "
+            "agente que no evalúa riesgo (Greedy) nunca lo marca."
+        ),
+    )
+    exceeds_safety_threshold: Optional[bool] = Field(
+        None,
+        description=(
+            "Informativo: True si el riesgo de esta oferta supera "
+            "`risk_model.SAFETY_HARD_RISK_LIMIT`, calculado igual para "
+            "TODOS los agentes (incluido uno que, como Greedy, no actúa "
+            "sobre esto). Permite medir cuántos pedidos de alto riesgo "
+            "acepta un agente ciego al riesgo que el adverso al riesgo sí "
+            "rechazaría -- la comparación central del KPI de seguridad."
+        ),
+    )
+    decision_latency_ms: Optional[float] = Field(
+        None,
+        description=(
+            "Tiempo real que tardó la decisión, medido por el motor de "
+            "simulación alrededor de `evaluate_offer`. Evidencia en vivo de "
+            "que se respeta el límite duro de 200 ms del reto; en un "
+            "timeout vale exactamente `decision_timeout_ms`."
+        ),
+    )
 
 
 class BaseAgent(ABC):
@@ -111,6 +162,17 @@ class BaseAgent(ABC):
     a través de `asyncio.to_thread` para no bloquear el event loop, tras
     haber precalculado de forma asíncrona cualquier matriz de distancias que
     el método necesite.
+
+    Dos hooks OPCIONALES, detectados por duck-typing en `server.py` (no son
+    parte del contrato abstracto porque solo tienen sentido para un agente
+    que pondera riesgo):
+    - `async def prepare_route_matrix(driver_state, active_orders, shift_state)`:
+      precalcula lo que `plan_route` necesite antes de que el motor lo
+      invoque en un hilo.
+    - `async def risk_weighted_path(origin_node, dest_node, shift_state) -> Tuple[int, ...]`:
+      la ruta FÍSICA que el motor dibuja/recorre de verdad. Un agente que no
+      lo implemente (p. ej. `GreedyAgent`) siempre recorre el camino más
+      rápido a secas, sin importar los eventos activos.
     """
 
     name: str

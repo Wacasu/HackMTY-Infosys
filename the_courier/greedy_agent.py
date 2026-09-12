@@ -10,16 +10,24 @@ el que se compara el Agente Inteligente.
 
 El único costo que este agente reconoce es Te (tiempo estimado de viaje real
 sobre la malla vial de Monterrey, vía `CityGraphProvider`). Nunca consulta
-`ShiftState.active_events` para decidir: por diseño, es ciego al riesgo.
+`ShiftState.active_events` para DECIDIR: por diseño, es ciego al riesgo.
+
+Sí MIDE el riesgo de cada viaje (vía `risk_model`, el mismo módulo que usa
+el Agente Inteligente) para poder REPORTARLO en el panel de KPIs -- sin esa
+medición no habría forma de comparar con datos reales "qué tan riesgosos
+son los viajes que un repartidor ciego al riesgo termina aceptando". Esa
+medición nunca entra en la decisión de aceptar/rechazar.
 """
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import List
 
 from agent_interface import AgentDecision, BaseAgent, DriverState, Offer, ShiftState
 from city_graph import CityGraphProvider
+from risk_model import SAFETY_HARD_RISK_LIMIT, route_risk_and_time, weighted_route_risk
 
 logger = logging.getLogger("the_courier.greedy_agent")
 
@@ -46,18 +54,24 @@ class GreedyAgent(BaseAgent):
     async def evaluate_offer(
         self, offer: Offer, driver_state: DriverState, shift_state: ShiftState
     ) -> AgentDecision:
-        leg_to_pickup_sec = await self._graph_provider.travel_time_sec(
-            driver_state.current_node, offer.pickup_node
-        )
-        leg_to_dropoff_sec = await self._graph_provider.travel_time_sec(
-            offer.pickup_node, offer.dropoff_node
+        # Mismo Dijkstra que ya se necesitaba para el tiempo de viaje (Te);
+        # `route_risk_and_time` de paso muestrea el riesgo a lo largo de esa
+        # misma ruta, así que medirlo no cuesta un segundo Dijkstra extra.
+        (risk_to_pickup, leg_to_pickup_sec), (risk_delivery, leg_to_dropoff_sec) = await asyncio.gather(
+            route_risk_and_time(self._graph_provider, driver_state.current_node, offer.pickup_node, shift_state),
+            route_risk_and_time(self._graph_provider, offer.pickup_node, offer.dropoff_node, shift_state),
         )
         total_travel_sec = max(
             leg_to_pickup_sec + leg_to_dropoff_sec + offer.service_time_sec,
             MIN_TRAVEL_TIME_FLOOR_SEC,
         )
-        pay_per_minute = offer.base_fare_mxn / (total_travel_sec / 60.0)
+        weighted_risk = weighted_route_risk(
+            risk_to_pickup, leg_to_pickup_sec, risk_delivery, leg_to_dropoff_sec
+        )
 
+        # La decisión sigue siendo EXCLUSIVAMENTE sobre pago/minuto: el
+        # riesgo recién calculado no participa aquí, a propósito.
+        pay_per_minute = offer.base_fare_mxn / (total_travel_sec / 60.0)
         accepted = pay_per_minute >= MIN_ACCEPTABLE_MXN_PER_MINUTE
         reasoning = (
             f"Pago estimado {pay_per_minute:.2f} MXN/min "
@@ -70,9 +84,10 @@ class GreedyAgent(BaseAgent):
             accepted=accepted,
             score=pay_per_minute,
             estimated_travel_time_sec=total_travel_sec,
-            estimated_risk=None,
+            estimated_risk=weighted_risk,
             net_profit_estimate_mxn=offer.base_fare_mxn,
             reasoning=reasoning,
+            exceeds_safety_threshold=weighted_risk >= SAFETY_HARD_RISK_LIMIT,
         )
 
     def plan_route(self, driver_state: DriverState, active_orders: List[Offer]) -> List[int]:

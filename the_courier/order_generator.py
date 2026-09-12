@@ -42,7 +42,17 @@ MIN_TIME_WINDOW_SLACK_SEC = 600
 MAX_TIME_WINDOW_SLACK_SEC = 2400
 
 EARTH_RADIUS_KM = 6371.0
+<<<<<<< Updated upstream
 CENTRO_MONTERREY_BOUNDS = (25.650, 25.695, -100.345, -100.285)
+=======
+# Centro de Monterrey (Macroplaza y alrededores, ~4.5 km de medio-lado desde
+# el depósito) en vez de la zona metropolitana completa: acota las
+# pruebas/demos a una zona chica y siempre dentro del grafo vial que carga
+# `city_graph.py` (radio `CENTRO_MONTERREY_RADIUS_M` = 6 km, dejando ~1.5 km
+# de margen para que ningún pedido caiga cerca del borde del grafo). Las
+# coordenadas se proyectan despues a calles reales.
+CENTRO_MONTERREY_BOUNDS = (25.6309, 25.7119, -100.3542, -100.2642)
+>>>>>>> Stashed changes
 
 
 def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -117,7 +127,11 @@ class OrderGenerator:
             # re-muestreando el dropoff para que el pedido tenga sentido.
             attempts = 0
             while dropoff_node == pickup_node and attempts < 5:
+<<<<<<< Updated upstream
                 record["dropoff_lat"], record["dropoff_lon"] = self._random_point_in_center(
+=======
+                record["dropoff_lat"], record["dropoff_lon"] = self._random_point_in_centro(
+>>>>>>> Stashed changes
                     rng)
                 dropoff_node = await graph_provider.nearest_node(
                     record["dropoff_lat"], record["dropoff_lon"]
@@ -160,7 +174,11 @@ class OrderGenerator:
         )
 
     @staticmethod
+<<<<<<< Updated upstream
     def _random_point_in_center(rng: random.Random) -> tuple[float, float]:
+=======
+    def _random_point_in_centro(rng: random.Random) -> tuple[float, float]:
+>>>>>>> Stashed changes
         min_lat, max_lat, min_lon, max_lon = CENTRO_MONTERREY_BOUNDS
         lat = rng.uniform(min_lat, max_lat)
         lon = rng.uniform(min_lon, max_lon)
@@ -175,8 +193,13 @@ class OrderGenerator:
         bounding box de Monterrey."""
         records: List[dict] = []
         for order_id in range(1, num_orders + 1):
+<<<<<<< Updated upstream
             pickup_lat, pickup_lon = self._random_point_in_center(rng)
             dropoff_lat, dropoff_lon = self._random_point_in_center(rng)
+=======
+            pickup_lat, pickup_lon = self._random_point_in_centro(rng)
+            dropoff_lat, dropoff_lon = self._random_point_in_centro(rng)
+>>>>>>> Stashed changes
 
             ready_time_sec = rng.randint(
                 0, max(self.shift_duration_sec - 1800, 0))
