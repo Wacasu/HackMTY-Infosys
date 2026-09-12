@@ -349,7 +349,7 @@ class RiskAverseAgent(BaseAgent):
             return int(cost_matrix[from_node][to_node])
 
         transit_idx = routing.RegisterTransitCallback(cost_callback)
-        routing.SetArcCostAllVehicles(transit_idx)
+        routing.SetArcCostEvaluatorOfAllVehicles(transit_idx)
 
         pickup_to_dropoff: Dict[int, int] = {}
         for i, stop in enumerate(stops):

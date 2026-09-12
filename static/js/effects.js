@@ -43,13 +43,13 @@ function animateDriverMarker(marker, target) {
         cancelAnimationFrame(marker._animationFrame);
     const start = marker.getLatLng();
     const startedAt = performance.now();
-    const duration = 650;
+    const tickMs = (state.tickIntervalSec / state.timeScale) * 1000;
+    const duration = Math.max(tickMs * 1.05, 200);
     const step = (now) => {
         const progress = Math.min((now - startedAt) / duration, 1);
-        const eased = progress * (2 - progress);
         marker.setLatLng([
-            start.lat + (target[0] - start.lat) * eased,
-            start.lng + (target[1] - start.lng) * eased,
+            start.lat + (target[0] - start.lat) * progress,
+            start.lng + (target[1] - start.lng) * progress,
         ]);
         if (progress < 1)
             marker._animationFrame = requestAnimationFrame(step);

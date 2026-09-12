@@ -10,6 +10,7 @@ document.getElementById("speed").addEventListener("input", (e) => {
     const speed = Number(e.target.value) || 1;
     document.getElementById("speedLabel").textContent = speed + "x";
     state.speed = speed;
+    state.timeScale = speed;
     updateSimClock(state.agents.greedy.elapsed || 0);
 });
 

@@ -101,6 +101,9 @@ function handleMessage(msg) {
         state.speed =
             msg.config?.time_scale ||
             Number(document.getElementById("speed").value);
+        state.tickIntervalSec =
+            msg.config?.tick_interval_sec || 30;
+        state.timeScale = state.speed;
         state.orders = msg.orders || [];
         document.getElementById("sessionLine").textContent =
             "sesión " +
@@ -178,7 +181,7 @@ function applyTick(msg) {
         animateDriverMarker(marker, [
             msg.driver_position.lat,
             msg.driver_position.lon,
-        ]);
+        ], agent.route);
     }
     state.history[key].push({
         t: agent.elapsed,
@@ -201,13 +204,13 @@ function applyTick(msg) {
         const cls = d.timed_out
             ? "timeout"
             : d.accepted
-              ? "accept"
-              : "reject";
+                ? "accept"
+                : "reject";
         const verb = d.timed_out
             ? "TIMEOUT"
             : d.accepted
-              ? "ACEPTA"
-              : "RECHAZA";
+                ? "ACEPTA"
+                : "RECHAZA";
         appendLog(
             `<span class="${cls}">${msg.agent_name} ${verb} #${d.order_id}</span> score=${Number(d.score).toFixed(2)} — ${d.reasoning}`,
         );

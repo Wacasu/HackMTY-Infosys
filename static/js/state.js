@@ -28,6 +28,8 @@ const state = {
     sessionReady: false,
     pendingEvent: null,
     speed: 40,
+    tickIntervalSec: 30,
+    timeScale: 40,
     agents: {
         greedy: emptyAgent(),
         smart: emptyAgent(),
