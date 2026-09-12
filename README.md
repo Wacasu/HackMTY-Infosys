@@ -82,32 +82,35 @@ de la conexión. Requiere acceso saliente a la API de Overpass/Nominatim.
 ## Contrato del WebSocket `/ws/shift-simulation`
 
 **Cliente → Servidor** (primer mensaje, obligatorio):
+
 ```json
 {
-  "random_seed": 42,
-  "shift_duration_sec": 10800,
-  "num_orders": 40,
-  "tick_interval_sec": 30,
-  "time_scale": 20.0,
-  "risk_alpha": 0.35
+    "random_seed": 42,
+    "shift_duration_sec": 10800,
+    "num_orders": 40,
+    "tick_interval_sec": 30,
+    "time_scale": 20.0,
+    "risk_alpha": 0.35
 }
 ```
 
 **Cliente → Servidor** (en cualquier momento, para inyectar un evento sorpresa):
+
 ```json
-{"type": "inject_event", "event_type": "HEAVY_RAIN", "severity": 0.85}
+{ "type": "inject_event", "event_type": "HEAVY_RAIN", "severity": 0.85 }
 ```
 
 **Servidor → Cliente** (mensajes intercalados de ambos motores):
+
 ```json
 {
-  "type": "tick",
-  "agent_name": "risk_averse_smart",
-  "alpha": 0.35,
-  "driver_state": { "...": "..." },
-  "shift_state": { "...": "..." },
-  "current_order_in_progress": { "...": "..." },
-  "recent_decisions": [ { "...": "..." } ]
+    "type": "tick",
+    "agent_name": "risk_averse_smart",
+    "alpha": 0.35,
+    "driver_state": { "...": "..." },
+    "shift_state": { "...": "..." },
+    "current_order_in_progress": { "...": "..." },
+    "recent_decisions": [{ "...": "..." }]
 }
 ```
 
@@ -121,3 +124,4 @@ POST /sessions/{session_id}/events
 
 `session_id` llega al cliente en el primer mensaje `session_started` que
 envía el servidor tras abrir el WebSocket.
+.
