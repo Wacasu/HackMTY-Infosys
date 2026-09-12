@@ -36,12 +36,16 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 from uuid import uuid4
 
+from pathlib import Path
+
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, ValidationError
 
 from agent_interface import AgentDecision, BaseAgent, DriverState, Offer, ShiftState, WeatherEvent
-from city_graph import CityGraphProvider, get_city_graph_provider
+from city_graph import CityGraphProvider, get_city_graph_provider, peek_city_graph_provider
 from greedy_agent import GreedyAgent
 from order_generator import OrderGenerator
 from risk_averse_agent import RiskAverseAgent
@@ -54,10 +58,26 @@ logging.basicConfig(level=logging.INFO)
 DEPOT_LATITUDE = 25.6714
 DEPOT_LONGITUDE = -100.3092
 
-# Timeout duro obligatorio para cualquier decisión de agente.
-AGENT_DECISION_TIMEOUT_SEC = 0.2
-
 MAX_RECENT_DECISIONS_KEPT = 20
+STATIC_DIR = Path(__file__).resolve().parent / "static"
+
+FLOOD_ZONE_PAYLOAD = [
+    {
+        "name": name,
+        "lat": lat,
+        "lon": lon,
+        "radius_km": radius_km,
+        "base_severity": base_severity,
+    }
+    for name, lat, lon, radius_km, base_severity in (
+        ("Puente del Papa / Río Santa Catarina", 25.6690, -100.3550, 1.2, 0.9),
+        ("Distribuidor Gonzalitos", 25.6825, -100.3505, 1.0, 0.8),
+        ("Av. Morones Prieto bajo Puente Constitución",
+         25.6640, -100.3320, 1.0, 0.85),
+        ("Cruce Av. Revolución / Río Santa Catarina", 25.6555, -100.3610, 1.0, 0.75),
+        ("Paso a Desnivel Cumbres", 25.7100, -100.3800, 1.3, 0.6),
+    )
+]
 
 
 # --------------------------------------------------------------------- #
@@ -68,13 +88,21 @@ class SimulationConfig(BaseModel):
     primer mensaje JSON del cliente al abrir el WebSocket."""
 
     random_seed: int = Field(..., description="Semilla determinista del turno")
-    shift_duration_sec: int = Field(3 * 3600, gt=0, description="Duración simulada del turno")
-    num_orders: int = Field(40, gt=0, le=500, description="Pedidos totales a generar")
-    tick_interval_sec: int = Field(30, gt=0, description="Paso de tiempo simulado por tick")
+    shift_duration_sec: int = Field(
+        3 * 3600, gt=0, description="Duración simulada del turno")
+    num_orders: int = Field(
+        40, gt=0, le=500, description="Pedidos totales a generar")
+    tick_interval_sec: int = Field(
+        30, gt=0, description="Paso de tiempo simulado por tick")
     time_scale: float = Field(
         20.0, gt=0, description="Segundos simulados por segundo real (velocidad de reproducción)"
     )
-    risk_alpha: float = Field(0.35, ge=0.0, description="Alpha del Agente Inteligente")
+    risk_alpha: float = Field(
+        0.35, ge=0.0, description="Alpha del Agente Inteligente")
+    decision_timeout_ms: int = Field(
+        2000, ge=200, le=10000,
+        description="Tiempo máximo para calcular una decisión sobre la malla vial real",
+    )
 
 
 class InjectEventRequest(BaseModel):
@@ -94,7 +122,8 @@ class LiveEnvironment:
     la MISMA instancia en cada tick, garantizando que compiten bajo
     condiciones idénticas."""
 
-    active_events: List[WeatherEvent] = field(default_factory=lambda: [WeatherEvent.CLEAR])
+    active_events: List[WeatherEvent] = field(
+        default_factory=lambda: [WeatherEvent.CLEAR])
     severity: float = 0.0
     ambient_temperature_c: float = 40.0
 
@@ -162,10 +191,12 @@ class ShiftSimulatorEngine:
         self._config = config
         self._session_id = session_id
 
-        self.driver_state = DriverState(current_node=depot_node, current_time_sec=0)
+        self.driver_state = DriverState(
+            current_node=depot_node, current_time_sec=0)
         self._seen_order_ids: set[int] = set()
         self._current_order: Optional[Offer] = None
         self._remaining_time_sec: float = 0.0
+        self._current_route: List[dict] = []
         self._recent_decisions: List[AgentDecision] = []
 
     async def run(self):
@@ -219,8 +250,9 @@ class ShiftSimulatorEngine:
         offer = self._order_generator.get_offer(order_id)
         try:
             decision = await asyncio.wait_for(
-                self.agent.evaluate_offer(offer, self.driver_state, shift_state),
-                timeout=AGENT_DECISION_TIMEOUT_SEC,
+                self.agent.evaluate_offer(
+                    offer, self.driver_state, shift_state),
+                timeout=self._config.decision_timeout_ms / 1000.0,
             )
         except asyncio.TimeoutError:
             self.driver_state.timeouts_incurred += 1
@@ -230,7 +262,7 @@ class ShiftSimulatorEngine:
                 score=0.0,
                 estimated_travel_time_sec=0.0,
                 reasoning=(
-                    f"Timeout: el agente no respondió en {int(AGENT_DECISION_TIMEOUT_SEC * 1000)} ms; "
+                    f"Timeout: el agente no respondió en {self._config.decision_timeout_ms} ms; "
                     "la oferta se rechaza automáticamente por seguridad."
                 ),
                 timed_out=True,
@@ -247,7 +279,7 @@ class ShiftSimulatorEngine:
 
     async def _advance_route_plan(self) -> None:
         active_orders = self.driver_state.active_orders
-        if isinstance(self.agent, RiskAverseAgent) and len(active_orders) > 1:
+        if isinstance(self.agent, RiskAverseAgent):
             await self.agent.prepare_route_matrix(self.driver_state, active_orders)
 
         order_sequence = await asyncio.to_thread(
@@ -265,6 +297,20 @@ class ShiftSimulatorEngine:
         travel_to_dropoff_sec = await self._graph_provider.travel_time_sec(
             offer.pickup_node, offer.dropoff_node
         )
+        pickup_path = await self._graph_provider.shortest_path(
+            self.driver_state.current_node, offer.pickup_node
+        )
+        dropoff_path = await self._graph_provider.shortest_path(
+            offer.pickup_node, offer.dropoff_node
+        )
+        route_nodes = pickup_path + dropoff_path[1:]
+        self._current_route = [
+            {
+                "lat": self._graph_provider.node_coordinates(node_id)[0],
+                "lon": self._graph_provider.node_coordinates(node_id)[1],
+            }
+            for node_id in route_nodes
+        ]
 
         self._current_order = offer
         self._remaining_time_sec = (
@@ -288,17 +334,23 @@ class ShiftSimulatorEngine:
         ]
         self._current_order = None
         self._remaining_time_sec = 0.0
+        self._current_route = []
 
     def _build_snapshot(self, shift_state: ShiftState, shift_ended: bool) -> dict:
+        driver_lat, driver_lon = self._graph_provider.node_coordinates(
+            self.driver_state.current_node
+        )
         return {
             "type": "shift_ended" if shift_ended else "tick",
             "agent_name": self.agent.name,
             "alpha": self.agent.alpha,
             "driver_state": self.driver_state.model_dump(),
+            "driver_position": {"lat": driver_lat, "lon": driver_lon},
             "shift_state": shift_state.model_dump(),
             "current_order_in_progress": (
                 self._current_order.model_dump() if self._current_order else None
             ),
+            "current_route": self._current_route,
             "recent_decisions": [d.model_dump() for d in self._recent_decisions[-5:]],
         }
 
@@ -338,6 +390,35 @@ async def health_check() -> dict:
     return {"status": "ok", "active_sessions": len(SESSIONS)}
 
 
+@app.get("/meta")
+async def simulation_meta() -> dict:
+    """Metadatos estáticos para el panel visual (depósito, zonas de riesgo)."""
+    graph_ready = False
+    bounds_payload = None
+    provider = peek_city_graph_provider()
+    if provider is not None and provider.is_loaded:
+        graph_ready = True
+        bounds = provider.bounds
+        bounds_payload = {
+            "min_lat": bounds.min_lat,
+            "max_lat": bounds.max_lat,
+            "min_lon": bounds.min_lon,
+            "max_lon": bounds.max_lon,
+        }
+
+    return {
+        "depot": {"lat": DEPOT_LATITUDE, "lon": DEPOT_LONGITUDE},
+        "flood_zones": FLOOD_ZONE_PAYLOAD,
+        "graph_ready": graph_ready,
+        "bounds": bounds_payload,
+    }
+
+
+@app.get("/")
+async def visual_lab() -> FileResponse:
+    return FileResponse(STATIC_DIR / "index.html")
+
+
 @app.post("/sessions/{session_id}/events")
 async def inject_event_rest(session_id: str, request: InjectEventRequest) -> dict:
     """Inyecta en vivo un evento sorpresa sobre una sesión de simulación
@@ -345,7 +426,8 @@ async def inject_event_rest(session_id: str, request: InjectEventRequest) -> dic
     async with SESSIONS_LOCK:
         session = SESSIONS.get(session_id)
     if session is None:
-        raise HTTPException(status_code=404, detail=f"Sesión '{session_id}' no encontrada o ya finalizada.")
+        raise HTTPException(
+            status_code=404, detail=f"Sesión '{session_id}' no encontrada o ya finalizada.")
 
     session.environment.apply_event(request.event_type, request.severity)
     return {
@@ -429,6 +511,9 @@ async def shift_simulation_ws(websocket: WebSocket) -> None:
             "session_id": session_id,
             "total_orders": order_generator.total_orders,
             "config": config.model_dump(),
+            "orders": order_generator.list_orders(),
+            "depot": {"lat": DEPOT_LATITUDE, "lon": DEPOT_LONGITUDE},
+            "flood_zones": FLOOD_ZONE_PAYLOAD,
         }
     )
 
@@ -461,7 +546,8 @@ async def shift_simulation_ws(websocket: WebSocket) -> None:
                 except (ValidationError, KeyError) as exc:
                     await websocket.send_json({"type": "error", "detail": str(exc)})
                     continue
-                environment.apply_event(event_request.event_type, event_request.severity)
+                environment.apply_event(
+                    event_request.event_type, event_request.severity)
                 await websocket.send_json(
                     {
                         "type": "event_ack",

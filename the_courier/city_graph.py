@@ -119,6 +119,10 @@ class CityGraphProvider:
         )
 
     @property
+    def is_loaded(self) -> bool:
+        return self._graph is not None
+
+    @property
     def graph(self) -> nx.MultiDiGraph:
         if self._graph is None:
             raise RuntimeError(
@@ -134,6 +138,11 @@ class CityGraphProvider:
                 "`await ensure_loaded()` primero."
             )
         return self._bounds
+
+    def node_coordinates(self, node_id: int) -> Tuple[float, float]:
+        """Devuelve (lat, lon) de un nodo ya validado del componente conexo."""
+        node_data = self.graph.nodes[node_id]
+        return float(node_data["y"]), float(node_data["x"])
 
     async def nearest_node(self, lat: float, lon: float) -> int:
         """Mapea una coordenada (lat, lon) al nodo válido más cercano dentro
@@ -195,6 +204,11 @@ class CityGraphProvider:
 
 _provider_singleton: Optional[CityGraphProvider] = None
 _singleton_lock = asyncio.Lock()
+
+
+def peek_city_graph_provider() -> Optional[CityGraphProvider]:
+    """Devuelve el singleton si ya existe, sin disparar la carga del grafo."""
+    return _provider_singleton
 
 
 async def get_city_graph_provider() -> CityGraphProvider:

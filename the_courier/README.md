@@ -70,6 +70,11 @@ pip install -r requirements.txt
 uvicorn server:app --reload --port 8000
 ```
 
+Abre el panel visual en [http://127.0.0.1:8000](http://127.0.0.1:8000):
+split-screen de ambos agentes, mapa de Monterrey, métricas en vivo e
+inyección de eventos sorpresa. El cliente de consola sigue disponible
+con `python test_client.py`.
+
 La primera conexión (o el arranque del servidor) dispara la descarga del
 grafo de Monterrey vía OSMnx; puede tardar uno o varios minutos dependiendo
 de la conexión. Requiere acceso saliente a la API de Overpass/Nominatim.
