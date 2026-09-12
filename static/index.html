@@ -1,0 +1,1011 @@
+<!doctype html>
+<html lang="es">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>The Courier — Simulador de Turno</title>
+        <style>
+            :root {
+                --bg: #0f1117;
+                --surface: #1a1d28;
+                --surface-2: #232735;
+                --border: #2e3344;
+                --text: #e8eaf0;
+                --text-dim: #8892a6;
+                --greedy-accent: #f59e0b;
+                --greedy-glow: rgba(245, 158, 11, 0.15);
+                --risk-accent: #14b8a6;
+                --risk-glow: rgba(20, 184, 166, 0.15);
+                --success: #22c55e;
+                --warning: #eab308;
+                --error: #ef4444;
+                --radius: 12px;
+            }
+
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
+
+            body {
+                font-family:
+                    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                    sans-serif;
+                background: var(--bg);
+                color: var(--text);
+                min-height: 100vh;
+                display: flex;
+                flex-direction: column;
+            }
+
+            /* ---------- Top bar ---------- */
+            .topbar {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                padding: 14px 28px;
+                background: var(--surface);
+                border-bottom: 1px solid var(--border);
+                flex-shrink: 0;
+            }
+            .topbar-title {
+                font-size: 18px;
+                font-weight: 700;
+                letter-spacing: -0.3px;
+            }
+            .topbar-title span {
+                color: var(--text-dim);
+                font-weight: 400;
+                font-size: 14px;
+            }
+            .topbar-status {
+                display: flex;
+                align-items: center;
+                gap: 16px;
+                font-size: 13px;
+                color: var(--text-dim);
+            }
+            .status-dot {
+                width: 8px;
+                height: 8px;
+                border-radius: 50%;
+                background: var(--text-dim);
+                transition: background 0.3s;
+            }
+            .status-dot.live {
+                background: var(--success);
+                box-shadow: 0 0 8px var(--success);
+            }
+            .status-dot.connecting {
+                background: var(--warning);
+                animation: pulse 1s infinite;
+            }
+            @keyframes pulse {
+                50% {
+                    opacity: 0.3;
+                }
+            }
+
+            /* ---------- Config overlay ---------- */
+            .overlay {
+                position: fixed;
+                inset: 0;
+                background: rgba(15, 17, 23, 0.92);
+                backdrop-filter: blur(6px);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                z-index: 100;
+                transition: opacity 0.3s;
+            }
+            .overlay.hidden {
+                opacity: 0;
+                pointer-events: none;
+            }
+            .config-card {
+                background: var(--surface);
+                border: 1px solid var(--border);
+                border-radius: 16px;
+                padding: 36px 40px;
+                width: 480px;
+                max-width: 90vw;
+                box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5);
+            }
+            .config-card h2 {
+                font-size: 22px;
+                margin-bottom: 6px;
+            }
+            .config-card p {
+                color: var(--text-dim);
+                font-size: 14px;
+                margin-bottom: 24px;
+            }
+            .config-grid {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 16px;
+            }
+            .config-field {
+                display: flex;
+                flex-direction: column;
+                gap: 6px;
+            }
+            .config-field.full {
+                grid-column: 1 / -1;
+            }
+            .config-field label {
+                font-size: 12px;
+                color: var(--text-dim);
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+            }
+            .config-field input {
+                background: var(--surface-2);
+                border: 1px solid var(--border);
+                border-radius: 8px;
+                padding: 10px 12px;
+                color: var(--text);
+                font-size: 14px;
+                outline: none;
+                transition: border-color 0.2s;
+            }
+            .config-field input:focus {
+                border-color: var(--risk-accent);
+            }
+            .btn-primary {
+                width: 100%;
+                margin-top: 24px;
+                padding: 14px;
+                border: none;
+                border-radius: 10px;
+                background: linear-gradient(
+                    135deg,
+                    var(--risk-accent),
+                    #0d9488
+                );
+                color: #fff;
+                font-size: 15px;
+                font-weight: 600;
+                cursor: pointer;
+                transition:
+                    transform 0.15s,
+                    box-shadow 0.2s;
+            }
+            .btn-primary:hover {
+                transform: translateY(-1px);
+                box-shadow: 0 8px 24px var(--risk-glow);
+            }
+            .btn-primary:active {
+                transform: translateY(0);
+            }
+            .btn-primary:disabled {
+                opacity: 0.5;
+                cursor: not-allowed;
+            }
+
+            /* ---------- Event bar ---------- */
+            .event-bar {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                padding: 10px 28px;
+                background: var(--surface);
+                border-bottom: 1px solid var(--border);
+                flex-wrap: wrap;
+            }
+            .event-bar-label {
+                font-size: 12px;
+                color: var(--text-dim);
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+                margin-right: 4px;
+            }
+            .event-btn {
+                padding: 7px 14px;
+                border: 1px solid var(--border);
+                border-radius: 8px;
+                background: var(--surface-2);
+                color: var(--text);
+                font-size: 13px;
+                cursor: pointer;
+                transition: all 0.2s;
+            }
+            .event-btn:hover {
+                border-color: var(--warning);
+                background: rgba(234, 179, 8, 0.1);
+            }
+            .event-btn.clear:hover {
+                border-color: var(--success);
+                background: rgba(34, 197, 94, 0.1);
+            }
+            .event-btn:disabled {
+                opacity: 0.4;
+                cursor: not-allowed;
+            }
+            .severity-slider {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                margin-left: auto;
+                font-size: 13px;
+                color: var(--text-dim);
+            }
+            .severity-slider input[type="range"] {
+                width: 100px;
+                accent-color: var(--warning);
+            }
+            .env-display {
+                font-size: 13px;
+                color: var(--text-dim);
+                padding: 4px 12px;
+                background: var(--surface-2);
+                border-radius: 6px;
+                border: 1px solid var(--border);
+                min-width: 200px;
+                text-align: center;
+            }
+
+            /* ---------- Split screen ---------- */
+            .split-screen {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 1px;
+                background: var(--border);
+                flex: 1;
+                overflow: hidden;
+            }
+            .agent-panel {
+                background: var(--bg);
+                padding: 20px 24px;
+                overflow-y: auto;
+                display: flex;
+                flex-direction: column;
+                gap: 16px;
+            }
+            .agent-header {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+            }
+            .agent-title {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+            }
+            .agent-badge {
+                width: 10px;
+                height: 10px;
+                border-radius: 50%;
+            }
+            .agent-panel.greedy .agent-badge {
+                background: var(--greedy-accent);
+                box-shadow: 0 0 10px var(--greedy-glow);
+            }
+            .agent-panel.risk .agent-badge {
+                background: var(--risk-accent);
+                box-shadow: 0 0 10px var(--risk-glow);
+            }
+            .agent-name {
+                font-size: 16px;
+                font-weight: 700;
+            }
+            .agent-tag {
+                font-size: 11px;
+                color: var(--text-dim);
+                padding: 3px 8px;
+                border-radius: 6px;
+                background: var(--surface-2);
+                border: 1px solid var(--border);
+            }
+            .agent-panel.greedy {
+                border-top: 3px solid var(--greedy-accent);
+            }
+            .agent-panel.risk {
+                border-top: 3px solid var(--risk-accent);
+            }
+
+            /* ---------- Stats grid ---------- */
+            .stats-grid {
+                display: grid;
+                grid-template-columns: repeat(3, 1fr);
+                gap: 10px;
+            }
+            .stat-card {
+                background: var(--surface);
+                border: 1px solid var(--border);
+                border-radius: var(--radius);
+                padding: 14px;
+                text-align: center;
+            }
+            .stat-value {
+                font-size: 24px;
+                font-weight: 700;
+                line-height: 1.2;
+            }
+            .agent-panel.greedy .stat-value {
+                color: var(--greedy-accent);
+            }
+            .agent-panel.risk .stat-value {
+                color: var(--risk-accent);
+            }
+            .stat-label {
+                font-size: 11px;
+                color: var(--text-dim);
+                text-transform: uppercase;
+                letter-spacing: 0.4px;
+                margin-top: 4px;
+            }
+
+            /* ---------- Section ---------- */
+            .section {
+                background: var(--surface);
+                border: 1px solid var(--border);
+                border-radius: var(--radius);
+                padding: 16px;
+            }
+            .section-title {
+                font-size: 12px;
+                color: var(--text-dim);
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+                margin-bottom: 10px;
+            }
+
+            /* ---------- Current order ---------- */
+            .order-row {
+                display: flex;
+                justify-content: space-between;
+                font-size: 13px;
+                padding: 4px 0;
+            }
+            .order-row span:first-child {
+                color: var(--text-dim);
+            }
+            .order-empty {
+                font-size: 13px;
+                color: var(--text-dim);
+                text-align: center;
+                padding: 12px 0;
+            }
+
+            /* ---------- Decisions list ---------- */
+            .decision {
+                display: flex;
+                align-items: flex-start;
+                gap: 8px;
+                padding: 8px 0;
+                border-bottom: 1px solid var(--border);
+                font-size: 12px;
+            }
+            .decision:last-child {
+                border-bottom: none;
+            }
+            .decision-icon {
+                width: 18px;
+                height: 18px;
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 10px;
+                font-weight: 700;
+                flex-shrink: 0;
+            }
+            .decision-icon.accept {
+                background: rgba(34, 197, 94, 0.15);
+                color: var(--success);
+            }
+            .decision-icon.reject {
+                background: rgba(239, 68, 68, 0.15);
+                color: var(--error);
+            }
+            .decision-icon.timeout {
+                background: rgba(234, 179, 8, 0.15);
+                color: var(--warning);
+            }
+            .decision-text {
+                flex: 1;
+                line-height: 1.4;
+            }
+            .decision-order {
+                color: var(--text-dim);
+                font-size: 11px;
+            }
+
+            /* ---------- Progress bar ---------- */
+            .progress-track {
+                height: 6px;
+                background: var(--surface-2);
+                border-radius: 3px;
+                overflow: hidden;
+            }
+            .progress-fill {
+                height: 100%;
+                border-radius: 3px;
+                transition: width 0.3s ease;
+            }
+            .agent-panel.greedy .progress-fill {
+                background: var(--greedy-accent);
+            }
+            .agent-panel.risk .progress-fill {
+                background: var(--risk-accent);
+            }
+            .progress-label {
+                display: flex;
+                justify-content: space-between;
+                font-size: 11px;
+                color: var(--text-dim);
+                margin-bottom: 6px;
+            }
+
+            /* ---------- Comparison bar ---------- */
+            .comparison-bar {
+                display: flex;
+                align-items: center;
+                gap: 12px;
+                padding: 10px 28px;
+                background: var(--surface);
+                border-top: 1px solid var(--border);
+                font-size: 13px;
+                color: var(--text-dim);
+                flex-shrink: 0;
+            }
+            .comparison-bar strong {
+                color: var(--text);
+            }
+            .comparison-bar .winner-greedy {
+                color: var(--greedy-accent);
+            }
+            .comparison-bar .winner-risk {
+                color: var(--risk-accent);
+            }
+
+            /* ---------- Responsive ---------- */
+            @media (max-width: 768px) {
+                .split-screen {
+                    grid-template-columns: 1fr;
+                }
+                .stats-grid {
+                    grid-template-columns: repeat(2, 1fr);
+                }
+                .config-grid {
+                    grid-template-columns: 1fr;
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <!-- ========== Top bar ========== -->
+        <div class="topbar">
+            <div class="topbar-title">
+                The Courier
+                <span>— Simulador de Turno · HackMTY 2026 / Infosys</span>
+            </div>
+            <div class="topbar-status">
+                <span id="shift-clock">00:00:00 / 00:00:00</span>
+                <span id="connection-status"
+                    ><span class="status-dot" id="status-dot"></span>
+                    <span id="status-text">Desconectado</span></span
+                >
+            </div>
+        </div>
+
+        <!-- ========== Event injection bar ========== -->
+        <div class="event-bar" id="event-bar" style="display: none">
+            <span class="event-bar-label">Inyectar evento:</span>
+            <button class="event-btn" data-event="HEAVY_RAIN" disabled>
+                Lluvia fuerte
+            </button>
+            <button class="event-btn" data-event="FLASH_FLOOD" disabled>
+                Inundación
+            </button>
+            <button class="event-btn" data-event="HEAVY_TRAFFIC" disabled>
+                Tráfico pesado
+            </button>
+            <button class="event-btn" data-event="EXTREME_HEAT" disabled>
+                Calor extremo
+            </button>
+            <button class="event-btn clear" data-event="CLEAR" disabled>
+                Limpiar
+            </button>
+            <div class="severity-slider">
+                <span>Severidad</span>
+                <input
+                    type="range"
+                    id="severity"
+                    min="0"
+                    max="100"
+                    value="70"
+                />
+                <span id="severity-val">0.70</span>
+            </div>
+            <div class="env-display" id="env-display">Clima: Despejado</div>
+        </div>
+
+        <!-- ========== Split screen ========== -->
+        <div class="split-screen" id="split-screen" style="display: none">
+            <!-- Greedy panel -->
+            <div class="agent-panel greedy" id="panel-greedy">
+                <div class="agent-header">
+                    <div class="agent-title">
+                        <div class="agent-badge"></div>
+                        <div class="agent-name">Agente Base — Greedy</div>
+                    </div>
+                    <div class="agent-tag">alpha = 0.00</div>
+                </div>
+
+                <div>
+                    <div class="progress-label">
+                        <span>Progreso del turno</span
+                        ><span id="greedy-progress-text">0%</span>
+                    </div>
+                    <div class="progress-track">
+                        <div
+                            class="progress-fill"
+                            id="greedy-progress"
+                            style="width: 0%"
+                        ></div>
+                    </div>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-value" id="greedy-earnings">$0</div>
+                        <div class="stat-label">Ganancias</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="greedy-completed">0</div>
+                        <div class="stat-label">Completados</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="greedy-rejected">0</div>
+                        <div class="stat-label">Rechazados</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="greedy-timeouts">0</div>
+                        <div class="stat-label">Timeouts</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="greedy-distance">0 km</div>
+                        <div class="stat-label">Distancia</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="greedy-active">0</div>
+                        <div class="stat-label">Activos</div>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <div class="section-title">Pedido en curso</div>
+                    <div id="greedy-current-order">
+                        <div class="order-empty">Sin pedido activo</div>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <div class="section-title">Decisiones recientes</div>
+                    <div id="greedy-decisions">
+                        <div class="order-empty">Esperando decisiones...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Risk-Averse panel -->
+            <div class="agent-panel risk" id="panel-risk">
+                <div class="agent-header">
+                    <div class="agent-title">
+                        <div class="agent-badge"></div>
+                        <div class="agent-name">
+                            Agente Inteligente — Risk-Averse
+                        </div>
+                    </div>
+                    <div class="agent-tag" id="risk-alpha-tag">
+                        alpha = 0.35
+                    </div>
+                </div>
+
+                <div>
+                    <div class="progress-label">
+                        <span>Progreso del turno</span
+                        ><span id="risk-progress-text">0%</span>
+                    </div>
+                    <div class="progress-track">
+                        <div
+                            class="progress-fill"
+                            id="risk-progress"
+                            style="width: 0%"
+                        ></div>
+                    </div>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-value" id="risk-earnings">$0</div>
+                        <div class="stat-label">Ganancias</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="risk-completed">0</div>
+                        <div class="stat-label">Completados</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="risk-rejected">0</div>
+                        <div class="stat-label">Rechazados</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="risk-timeouts">0</div>
+                        <div class="stat-label">Timeouts</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="risk-distance">0 km</div>
+                        <div class="stat-label">Distancia</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="risk-active">0</div>
+                        <div class="stat-label">Activos</div>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <div class="section-title">Pedido en curso</div>
+                    <div id="risk-current-order">
+                        <div class="order-empty">Sin pedido activo</div>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <div class="section-title">Decisiones recientes</div>
+                    <div id="risk-decisions">
+                        <div class="order-empty">Esperando decisiones...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========== Comparison bar ========== -->
+        <div class="comparison-bar" id="comparison-bar" style="display: none">
+            <span
+                >Comparación:
+                <strong id="cmp-greedy-earnings">$0</strong> (Greedy) vs
+                <strong id="cmp-risk-earnings">$0</strong> (Risk-Averse) —
+                <span id="cmp-winner">—</span></span
+            >
+        </div>
+
+        <!-- ========== Config overlay ========== -->
+        <div class="overlay" id="config-overlay">
+            <div class="config-card">
+                <h2>The Courier — Simulador</h2>
+                <p>
+                    Configura los parámetros del turno y observa a dos
+                    repartidores competir en paralelo sobre la misma malla vial
+                    de Monterrey.
+                </p>
+                <div class="config-grid">
+                    <div class="config-field">
+                        <label>Semilla aleatoria</label>
+                        <input type="number" id="cfg-seed" value="42" />
+                    </div>
+                    <div class="config-field">
+                        <label>Número de pedidos</label>
+                        <input
+                            type="number"
+                            id="cfg-orders"
+                            value="40"
+                            min="1"
+                            max="500"
+                        />
+                    </div>
+                    <div class="config-field">
+                        <label>Duración del turno (seg)</label>
+                        <input
+                            type="number"
+                            id="cfg-duration"
+                            value="10800"
+                            min="60"
+                        />
+                    </div>
+                    <div class="config-field">
+                        <label>Intervalo de tick (seg)</label>
+                        <input type="number" id="cfg-tick" value="30" min="1" />
+                    </div>
+                    <div class="config-field">
+                        <label>Velocidad de reproducción (x)</label>
+                        <input
+                            type="number"
+                            id="cfg-speed"
+                            value="20"
+                            min="0.1"
+                            step="0.5"
+                        />
+                    </div>
+                    <div class="config-field">
+                        <label>Alpha (aversión al riesgo)</label>
+                        <input
+                            type="number"
+                            id="cfg-alpha"
+                            value="0.35"
+                            min="0"
+                            max="2"
+                            step="0.05"
+                        />
+                    </div>
+                </div>
+                <button class="btn-primary" id="start-btn">
+                    Iniciar simulación
+                </button>
+            </div>
+        </div>
+
+        <script>
+            (function () {
+                "use strict";
+
+                let ws = null;
+                let sessionId = null;
+                let shiftDurationSec = 0;
+
+                // ---------- Helpers ----------
+                const $ = (id) => document.getElementById(id);
+
+                function fmtTime(sec) {
+                    const h = Math.floor(sec / 3600);
+                    const m = Math.floor((sec % 3600) / 60);
+                    const s = Math.floor(sec % 60);
+                    return [h, m, s]
+                        .map((v) => String(v).padStart(2, "0"))
+                        .join(":");
+                }
+
+                function fmtMoney(v) {
+                    return "$" + Number(v).toFixed(2);
+                }
+
+                function setStatus(text, cls) {
+                    $("status-text").textContent = text;
+                    const dot = $("status-dot");
+                    dot.className = "status-dot " + (cls || "");
+                }
+
+                // ---------- Config overlay ----------
+                $("start-btn").addEventListener("click", () => {
+                    const config = {
+                        random_seed: parseInt($("cfg-seed").value, 10),
+                        shift_duration_sec: parseInt(
+                            $("cfg-duration").value,
+                            10,
+                        ),
+                        num_orders: parseInt($("cfg-orders").value, 10),
+                        tick_interval_sec: parseInt($("cfg-tick").value, 10),
+                        time_scale: parseFloat($("cfg-speed").value),
+                        risk_alpha: parseFloat($("cfg-alpha").value),
+                    };
+                    startSimulation(config);
+                });
+
+                // ---------- Severity slider ----------
+                $("severity").addEventListener("input", (e) => {
+                    $("severity-val").textContent = (
+                        e.target.value / 100
+                    ).toFixed(2);
+                });
+
+                // ---------- Event buttons ----------
+                document.querySelectorAll(".event-btn").forEach((btn) => {
+                    btn.addEventListener("click", () => {
+                        if (!ws || ws.readyState !== WebSocket.OPEN) return;
+                        ws.send(
+                            JSON.stringify({
+                                type: "inject_event",
+                                event_type: btn.dataset.event,
+                                severity:
+                                    parseInt($("severity").value, 10) / 100,
+                            }),
+                        );
+                    });
+                });
+
+                // ---------- WebSocket ----------
+                function startSimulation(config) {
+                    $("start-btn").disabled = true;
+                    $("start-btn").textContent = "Conectando...";
+                    setStatus("Conectando...", "connecting");
+
+                    const proto = location.protocol === "https:" ? "wss" : "ws";
+                    ws = new WebSocket(
+                        `${proto}://${location.host}/ws/shift-simulation`,
+                    );
+
+                    ws.onopen = () => {
+                        setStatus("Conectado", "live");
+                        ws.send(JSON.stringify(config));
+                    };
+
+                    ws.onmessage = (evt) => {
+                        const msg = JSON.parse(evt.data);
+                        handleMessage(msg);
+                    };
+
+                    ws.onerror = () => {
+                        setStatus("Error de conexión", "");
+                        $("start-btn").disabled = false;
+                        $("start-btn").textContent = "Iniciar simulación";
+                    };
+
+                    ws.onclose = () => {
+                        setStatus("Desconectado", "");
+                        $("start-btn").disabled = false;
+                        $("start-btn").textContent = "Iniciar simulación";
+                    };
+                }
+
+                // ---------- Message handler ----------
+                function handleMessage(msg) {
+                    switch (msg.type) {
+                        case "session_started":
+                            sessionId = msg.session_id;
+                            shiftDurationSec = msg.config.shift_duration_sec;
+                            $("config-overlay").classList.add("hidden");
+                            $("event-bar").style.display = "flex";
+                            $("split-screen").style.display = "grid";
+                            $("comparison-bar").style.display = "flex";
+                            document
+                                .querySelectorAll(".event-btn")
+                                .forEach((b) => (b.disabled = false));
+                            $("risk-alpha-tag").textContent =
+                                "alpha = " + msg.config.risk_alpha.toFixed(2);
+                            break;
+
+                        case "tick":
+                            updateAgent(msg);
+                            updateClock(msg.shift_state);
+                            updateEnv(msg.shift_state);
+                            updateComparison();
+                            break;
+
+                        case "shift_ended":
+                            updateAgent(msg);
+                            updateClock(msg.shift_state);
+                            updateComparison();
+                            break;
+
+                        case "event_ack":
+                            break;
+
+                        case "agent_finished":
+                            break;
+
+                        case "session_complete":
+                            setStatus("Simulación completa", "live");
+                            break;
+
+                        case "error":
+                            console.error("Server error:", msg.detail);
+                            break;
+                    }
+                }
+
+                // ---------- Update functions ----------
+                function updateAgent(msg) {
+                    const isGreedy = msg.agent_name === "greedy_base";
+                    const prefix = isGreedy ? "greedy" : "risk";
+                    const ds = msg.driver_state;
+                    const ss = msg.shift_state;
+
+                    $(prefix + "-earnings").textContent = fmtMoney(
+                        ds.earnings_mxn,
+                    );
+                    $(prefix + "-completed").textContent = ds.orders_completed;
+                    $(prefix + "-rejected").textContent = ds.orders_rejected;
+                    $(prefix + "-timeouts").textContent = ds.timeouts_incurred;
+                    $(prefix + "-distance").textContent =
+                        ds.distance_traveled_km.toFixed(1) + " km";
+                    $(prefix + "-active").textContent = ds.active_orders.length;
+
+                    const pct = Math.min(
+                        100,
+                        (ss.elapsed_sec / ss.shift_duration_sec) * 100,
+                    );
+                    $(prefix + "-progress").style.width = pct + "%";
+                    $(prefix + "-progress-text").textContent =
+                        Math.round(pct) + "%";
+
+                    // Current order
+                    const orderEl = $(prefix + "-current-order");
+                    const co = msg.current_order_in_progress;
+                    if (co) {
+                        orderEl.innerHTML = `
+        <div class="order-row"><span>Pedido #${co.order_id}</span><span>${fmtMoney(co.base_fare_mxn)}</span></div>
+        <div class="order-row"><span>Distancia (recta)</span><span>${co.straight_line_distance_km.toFixed(2)} km</span></div>
+        <div class="order-row"><span>Ventana</span><span>${fmtTime(co.ready_time_sec)} – ${fmtTime(co.due_time_sec)}</span></div>
+        <div class="order-row"><span>Tiempo de servicio</span><span>${co.service_time_sec}s</span></div>
+      `;
+                    } else {
+                        orderEl.innerHTML =
+                            '<div class="order-empty">Sin pedido activo</div>';
+                    }
+
+                    // Decisions
+                    const decEl = $(prefix + "-decisions");
+                    const decisions = msg.recent_decisions || [];
+                    if (decisions.length === 0) {
+                        decEl.innerHTML =
+                            '<div class="order-empty">Esperando decisiones...</div>';
+                    } else {
+                        decEl.innerHTML = decisions
+                            .map((d) => {
+                                let iconClass = d.accepted
+                                    ? "accept"
+                                    : "reject";
+                                let icon = d.accepted ? "✓" : "✗";
+                                if (d.timed_out) {
+                                    iconClass = "timeout";
+                                    icon = "!";
+                                }
+                                return `
+          <div class="decision">
+            <div class="decision-icon ${iconClass}">${icon}</div>
+            <div class="decision-text">
+              <span class="decision-order">Pedido #${d.order_id}</span><br>
+              ${d.reasoning}
+            </div>
+          </div>
+        `;
+                            })
+                            .join("");
+                    }
+                }
+
+                function updateClock(ss) {
+                    $("shift-clock").textContent =
+                        fmtTime(ss.elapsed_sec) +
+                        " / " +
+                        fmtTime(ss.shift_duration_sec);
+                }
+
+                function updateEnv(ss) {
+                    const events = ss.active_events || ["CLEAR"];
+                    const labels = {
+                        CLEAR: "Despejado",
+                        HEAVY_RAIN: "Lluvia fuerte",
+                        FLASH_FLOOD: "Inundación",
+                        HEAVY_TRAFFIC: "Tráfico pesado",
+                        EXTREME_HEAT:
+                            "Calor extremo (" +
+                            ss.ambient_temperature_c.toFixed(0) +
+                            "°C)",
+                    };
+                    const parts = events.map((e) => labels[e] || e);
+                    let text = "Clima: " + parts.join(", ");
+                    if (ss.event_severity > 0)
+                        text += " (sev: " + ss.event_severity.toFixed(2) + ")";
+                    $("env-display").textContent = text;
+                }
+
+                function updateComparison() {
+                    const g =
+                        parseFloat(
+                            $("greedy-earnings").textContent.replace("$", ""),
+                        ) || 0;
+                    const r =
+                        parseFloat(
+                            $("risk-earnings").textContent.replace("$", ""),
+                        ) || 0;
+                    $("cmp-greedy-earnings").textContent = fmtMoney(g);
+                    $("cmp-risk-earnings").textContent = fmtMoney(r);
+                    const winnerEl = $("cmp-winner");
+                    if (g > r) {
+                        winnerEl.textContent = "Greedy va ganando";
+                        winnerEl.className = "winner-greedy";
+                    } else if (r > g) {
+                        winnerEl.textContent = "Risk-Averse va ganando";
+                        winnerEl.className = "winner-risk";
+                    } else {
+                        winnerEl.textContent = "Empate";
+                        winnerEl.className = "";
+                    }
+                }
+            })();
+        </script>
+    </body>
+</html>
