@@ -93,11 +93,14 @@ class CityGraphProvider:
         """Descarga el grafo vial de Monterrey y lo reduce al componente
         fuertemente conexo más grande. Función síncrona por diseño: solo
         debe ejecutarse dentro de `asyncio.to_thread`."""
-        raw_graph = ox.graph_from_place(place, network_type=MONTERREY_NETWORK_TYPE)
-        raw_graph = ox.add_edge_speeds(raw_graph, fallback=DEFAULT_FALLBACK_SPEED_KPH)
+        raw_graph = ox.graph_from_place(
+            place, network_type=MONTERREY_NETWORK_TYPE)
+        raw_graph = ox.add_edge_speeds(
+            raw_graph, fallback=DEFAULT_FALLBACK_SPEED_KPH)
         raw_graph = ox.add_edge_travel_times(raw_graph)
 
-        largest_scc_nodes = max(nx.strongly_connected_components(raw_graph), key=len)
+        largest_scc_nodes = max(
+            nx.strongly_connected_components(raw_graph), key=len)
         connected_graph = raw_graph.subgraph(largest_scc_nodes).copy()
 
         for _, _, data in connected_graph.edges(data=True):
@@ -105,8 +108,10 @@ class CityGraphProvider:
                 data["travel_time_sec"] = float(data["travel_time"])
             else:
                 length_m = float(data.get("length", 1.0))
-                speed_kph = float(data.get("speed_kph", DEFAULT_FALLBACK_SPEED_KPH))
-                data["travel_time_sec"] = length_m / (speed_kph * 1000.0 / 3600.0)
+                speed_kph = float(
+                    data.get("speed_kph", DEFAULT_FALLBACK_SPEED_KPH))
+                data["travel_time_sec"] = length_m / \
+                    (speed_kph * 1000.0 / 3600.0)
 
         return connected_graph
 
@@ -175,11 +180,44 @@ class CityGraphProvider:
         await self.ensure_loaded()
         return await asyncio.to_thread(self._shortest_path_sync, origin_node, dest_node)
 
+    async def route_coordinates(self, path: Tuple[int, ...]) -> Tuple[Tuple[float, float], ...]:
+        """Devuelve coordenadas (lat, lon) siguiendo la geometria de cada arista OSM."""
+        await self.ensure_loaded()
+        return await asyncio.to_thread(self._route_coordinates_sync, path)
+
     def _shortest_path_sync(self, origin_node: int, dest_node: int) -> Tuple[int, ...]:
         if origin_node == dest_node:
             return (origin_node,)
-        path = nx.shortest_path(self._graph, origin_node, dest_node, weight="travel_time_sec")
+        path = nx.shortest_path(self._graph, origin_node,
+                                dest_node, weight="travel_time_sec")
         return tuple(path)
+
+    def _route_coordinates_sync(
+        self, path: Tuple[int, ...]
+    ) -> Tuple[Tuple[float, float], ...]:
+        if not path:
+            return ()
+        coordinates: list[Tuple[float, float]] = []
+        first = self._graph.nodes[path[0]]
+        coordinates.append((float(first["y"]), float(first["x"])))
+        for origin, destination in zip(path, path[1:]):
+            edge_options = self._graph.get_edge_data(origin, destination) or {}
+            edge_data = min(
+                edge_options.values(),
+                key=lambda data: float(
+                    data.get("travel_time_sec", float("inf"))),
+            )
+            geometry = edge_data.get("geometry")
+            if geometry is not None:
+                edge_coordinates = [(float(lat), float(lon))
+                                    for lon, lat in geometry.coords]
+                if edge_coordinates and edge_coordinates[0] == coordinates[-1]:
+                    edge_coordinates = edge_coordinates[1:]
+                coordinates.extend(edge_coordinates)
+            else:
+                node = self._graph.nodes[destination]
+                coordinates.append((float(node["y"]), float(node["x"])))
+        return tuple(coordinates)
 
     async def travel_time_matrix(
         self, nodes: Tuple[int, ...]

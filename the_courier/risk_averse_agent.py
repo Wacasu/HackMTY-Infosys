@@ -59,7 +59,7 @@ SAFETY_HARD_RISK_LIMIT = 0.75
 RISK_PENALTY_MINUTES_AT_MAX_RISK = 45.0
 
 # Rentabilidad mínima aceptable en MXN por minuto ajustado por riesgo.
-MIN_ACCEPTABLE_RISK_ADJUSTED_MXN_PER_MINUTE = 2.5
+MIN_ACCEPTABLE_RISK_ADJUSTED_MXN_PER_MINUTE = 1.8
 
 MIN_TRAVEL_TIME_FLOOR_SEC = 30.0
 
@@ -133,8 +133,10 @@ class RiskAverseAgent(BaseAgent):
             self._severity_for_event(shift_state, WeatherEvent.HEAVY_RAIN),
             self._severity_for_event(shift_state, WeatherEvent.FLASH_FLOOD),
         )
-        traffic_severity = self._severity_for_event(shift_state, WeatherEvent.HEAVY_TRAFFIC)
-        heat_severity = self._severity_for_event(shift_state, WeatherEvent.EXTREME_HEAT)
+        traffic_severity = self._severity_for_event(
+            shift_state, WeatherEvent.HEAVY_TRAFFIC)
+        heat_severity = self._severity_for_event(
+            shift_state, WeatherEvent.EXTREME_HEAT)
 
         risk = 0.05  # riesgo ambiental base (Monterrey, tráfico ordinario)
         risk += 0.35 * rain_severity
@@ -170,10 +172,12 @@ class RiskAverseAgent(BaseAgent):
             sampled_nodes = path_nodes
 
         point_risks = [
-            self._point_risk(graph.nodes[node]["y"], graph.nodes[node]["x"], shift_state)
+            self._point_risk(graph.nodes[node]["y"],
+                             graph.nodes[node]["x"], shift_state)
             for node in sampled_nodes
         ]
-        average_risk = sum(point_risks) / len(point_risks) if point_risks else 0.05
+        average_risk = sum(point_risks) / \
+            len(point_risks) if point_risks else 0.05
         return average_risk, travel_time_sec
 
     # ------------------------------------------------------------------ #
@@ -207,7 +211,8 @@ class RiskAverseAgent(BaseAgent):
         weighted_cost_minutes = te_minutes + self.alpha * weighted_risk * (
             RISK_PENALTY_MINUTES_AT_MAX_RISK
         )
-        risk_adjusted_score = offer.base_fare_mxn / max(weighted_cost_minutes, 0.1)
+        risk_adjusted_score = offer.base_fare_mxn / \
+            max(weighted_cost_minutes, 0.1)
 
         hard_safety_violation = weighted_risk >= SAFETY_HARD_RISK_LIMIT
         meets_profitability_bar = (
@@ -287,7 +292,8 @@ class RiskAverseAgent(BaseAgent):
             nodes.append(order.pickup_node)
             nodes.append(order.dropoff_node)
 
-        risk_matrix: List[List[float]] = [[0.0] * len(nodes) for _ in range(len(nodes))]
+        risk_matrix: List[List[float]] = [
+            [0.0] * len(nodes) for _ in range(len(nodes))]
         time_matrix = await self._graph_provider.travel_time_matrix(tuple(nodes))
 
         for i, origin in enumerate(nodes):
@@ -315,111 +321,10 @@ class RiskAverseAgent(BaseAgent):
         self._route_cost_matrix = tuple(tuple(row) for row in cost_matrix)
 
     def plan_route(self, driver_state: DriverState, active_orders: List[Offer]) -> List[int]:
-        """Resuelve un PDPTW de un solo vehículo con Google OR-Tools sobre
-        la matriz de costos Te + alpha*Re precalculada por
-        `prepare_route_matrix`. Devuelve la secuencia de `order_id` en el
-        orden en que deben entregarse (cada order_id aparece una sola vez,
-        en el momento de su dropoff)."""
-        if not active_orders:
-            return []
+        """Usa la misma secuencia FIFO que el agente base.
 
-        if not self._route_cost_matrix or len(self._route_stops) != 2 * len(active_orders):
-            raise RuntimeError(
-                "plan_route requiere una matriz de costos vigente: llama a "
-                "`await prepare_route_matrix(driver_state, active_orders)` primero."
-            )
-
-        num_locations = len(self._route_stops) + 1  # +1 por el depot (índice 0)
-        manager = pywrapcp.RoutingIndexManager(num_locations, 1, 0)
-        routing = pywrapcp.RoutingModel(manager)
-
-        def cost_callback(from_index: int, to_index: int) -> int:
-            from_node = manager.IndexToNode(from_index)
-            to_node = manager.IndexToNode(to_index)
-            return self._route_cost_matrix[from_node][to_node]
-
-        transit_callback_index = routing.RegisterTransitCallback(cost_callback)
-        routing.SetArcCostEvaluatorOfAllVehicles(transit_callback_index)
-
-        horizon_sec = max(
-            (stop.time_window_end_sec for stop in self._route_stops), default=3600
-        ) + 3600
-        routing.AddDimension(
-            transit_callback_index,
-            horizon_sec,
-            horizon_sec,
-            False,
-            "Time",
-        )
-        time_dimension = routing.GetDimensionOrDie("Time")
-
-        for stop_offset, stop in enumerate(self._route_stops):
-            node_index = stop_offset + 1  # el índice 0 es el depot
-            routing_index = manager.NodeToIndex(node_index)
-            time_dimension.CumulVar(routing_index).SetRange(
-                max(stop.time_window_start_sec, 0), max(stop.time_window_end_sec, 1)
-            )
-
-        pickup_index_by_order = {
-            stop.order_id: offset + 1
-            for offset, stop in enumerate(self._route_stops)
-            if stop.is_pickup
-        }
-        dropoff_index_by_order = {
-            stop.order_id: offset + 1
-            for offset, stop in enumerate(self._route_stops)
-            if not stop.is_pickup
-        }
-
-        solver = routing.solver()
-        for order in active_orders:
-            pickup_node_index = pickup_index_by_order[order.order_id]
-            dropoff_node_index = dropoff_index_by_order[order.order_id]
-            pickup_routing_index = manager.NodeToIndex(pickup_node_index)
-            dropoff_routing_index = manager.NodeToIndex(dropoff_node_index)
-
-            routing.AddPickupAndDelivery(pickup_routing_index, dropoff_routing_index)
-            solver.Add(
-                routing.VehicleVar(pickup_routing_index)
-                == routing.VehicleVar(dropoff_routing_index)
-            )
-            solver.Add(
-                time_dimension.CumulVar(pickup_routing_index)
-                <= time_dimension.CumulVar(dropoff_routing_index)
-            )
-
-        search_parameters = pywrapcp.DefaultRoutingSearchParameters()
-        search_parameters.first_solution_strategy = (
-            routing_enums_pb2.FirstSolutionStrategy.PATH_CHEAPEST_ARC
-        )
-        search_parameters.local_search_metaheuristic = (
-            routing_enums_pb2.LocalSearchMetaheuristic.GUIDED_LOCAL_SEARCH
-        )
-        search_parameters.time_limit.FromMilliseconds(150)
-
-        solution = routing.SolveWithParameters(search_parameters)
-        if solution is None:
-            logger.warning(
-                "OR-Tools no encontró solución factible para %d pedidos activos; "
-                "se usa orden FIFO como respaldo seguro.",
-                len(active_orders),
-            )
-            return [order.order_id for order in active_orders]
-
-        ordered_order_ids: List[int] = []
-        seen_order_ids: set[int] = set()
-        index = routing.Start(0)
-        while not routing.IsEnd(index):
-            node_index = manager.IndexToNode(index)
-            if node_index != 0:
-                stop = self._route_stops[node_index - 1]
-                if not stop.is_pickup and stop.order_id not in seen_order_ids:
-                    ordered_order_ids.append(stop.order_id)
-                    seen_order_ids.add(stop.order_id)
-            index = solution.Value(routing.NextVar(index))
-
-        for order in active_orders:
-            if order.order_id not in seen_order_ids:
-                ordered_order_ids.append(order.order_id)
-
-        return ordered_order_ids
+        Ambos repartidores recorren la misma politica de paradas y la misma
+        red vial; la diferencia entre modelos queda en aceptar pedidos y en
+        ponderar el riesgo, no en dibujar una ruta distinta.
+        """
+        return [order.order_id for order in active_orders]
