@@ -32,8 +32,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 from uuid import uuid4
 
 from pathlib import Path
@@ -77,6 +78,19 @@ FLOOD_ZONE_PAYLOAD = [
         ("Paso a Desnivel Cumbres", 25.7100, -100.3800, 1.3, 0.6),
     )
 ]
+
+EARTH_RADIUS_KM = 6371.0
+
+
+def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    phi1, phi2 = math.radians(lat1), math.radians(lat2)
+    d_phi = math.radians(lat2 - lat1)
+    d_lambda = math.radians(lon2 - lon1)
+    a = (
+        math.sin(d_phi / 2) ** 2
+        + math.cos(phi1) * math.cos(phi2) * math.sin(d_lambda / 2) ** 2
+    )
+    return 2 * EARTH_RADIUS_KM * math.asin(math.sqrt(a))
 
 
 # --------------------------------------------------------------------- #
@@ -200,6 +214,8 @@ class ShiftSimulatorEngine:
         self._route_nodes: List[int] = []
         self._current_route: List[dict] = []
         self._recent_decisions: List[AgentDecision] = []
+        self._incidents_exposed: int = 0
+        self._incident_zones_crossed: List[str] = []
 
     async def run(self):
         """Async generator: avanza el turno tick a tick y produce un
@@ -288,6 +304,12 @@ class ShiftSimulatorEngine:
 
     async def _advance_route_plan(self) -> None:
         active_orders = self.driver_state.active_orders
+        if not active_orders:
+            return
+
+        if hasattr(self.agent, "prepare_route_matrix"):
+            await self.agent.prepare_route_matrix(self.driver_state, active_orders)
+
         order_sequence = await asyncio.to_thread(
             self.agent.plan_route, self.driver_state, active_orders
         )
@@ -297,24 +319,45 @@ class ShiftSimulatorEngine:
         next_order_id = order_sequence[0]
         offer = next(o for o in active_orders if o.order_id == next_order_id)
 
-        travel_to_pickup_sec = await self._graph_provider.travel_time_sec(
-            self.driver_state.current_node, offer.pickup_node
+        use_risk_routing = (
+            hasattr(self.agent, "risk_penalty_factor")
+            and self.agent.risk_penalty_factor() > 0.0
         )
-        travel_to_dropoff_sec = await self._graph_provider.travel_time_sec(
-            offer.pickup_node, offer.dropoff_node
-        )
-        pickup_path = await self._graph_provider.shortest_path(
-            self.driver_state.current_node, offer.pickup_node
-        )
-        dropoff_path = await self._graph_provider.shortest_path(
-            offer.pickup_node, offer.dropoff_node
-        )
+
+        if use_risk_routing:
+            risk_factor = self.agent.risk_penalty_factor()
+            travel_to_pickup_sec = await self._graph_provider.risk_weighted_travel_time_sec(
+                self.driver_state.current_node, offer.pickup_node, risk_factor
+            )
+            travel_to_dropoff_sec = await self._graph_provider.risk_weighted_travel_time_sec(
+                offer.pickup_node, offer.dropoff_node, risk_factor
+            )
+            pickup_path = await self._graph_provider.risk_weighted_path(
+                self.driver_state.current_node, offer.pickup_node, risk_factor
+            )
+            dropoff_path = await self._graph_provider.risk_weighted_path(
+                offer.pickup_node, offer.dropoff_node, risk_factor
+            )
+        else:
+            travel_to_pickup_sec = await self._graph_provider.travel_time_sec(
+                self.driver_state.current_node, offer.pickup_node
+            )
+            travel_to_dropoff_sec = await self._graph_provider.travel_time_sec(
+                offer.pickup_node, offer.dropoff_node
+            )
+            pickup_path = await self._graph_provider.shortest_path(
+                self.driver_state.current_node, offer.pickup_node
+            )
+            dropoff_path = await self._graph_provider.shortest_path(
+                offer.pickup_node, offer.dropoff_node
+            )
         route_nodes = pickup_path + dropoff_path[1:]
         route_coordinates = await self._graph_provider.route_coordinates(route_nodes)
         self._current_route = [
             {"lat": latitude, "lon": longitude}
             for latitude, longitude in route_coordinates
         ]
+        self._count_route_incidents(route_coordinates)
         self._route_nodes = list(route_nodes)
         self._route_travel_sec = max(
             travel_to_pickup_sec + travel_to_dropoff_sec, 0.0
@@ -361,6 +404,28 @@ class ShiftSimulatorEngine:
         )
         self.driver_state.current_node = self._route_nodes[route_index]
 
+    def _count_route_incidents(
+        self, route_coordinates: Tuple[Tuple[float, float], ...]
+    ) -> None:
+        active_events = self._environment.active_events
+        has_hazard = any(
+            event in active_events
+            for event in (WeatherEvent.HEAVY_RAIN, WeatherEvent.FLASH_FLOOD, WeatherEvent.HEAVY_TRAFFIC)
+        )
+        if not has_hazard:
+            return
+
+        zones_entered: set[str] = set()
+        for lat, lon in route_coordinates:
+            for zone in FLOOD_ZONE_PAYLOAD:
+                distance = _haversine_km(lat, lon, zone["lat"], zone["lon"])
+                if distance <= zone["radius_km"]:
+                    zones_entered.add(zone["name"])
+
+        for zone_name in zones_entered:
+            self._incidents_exposed += 1
+            self._incident_zones_crossed.append(zone_name)
+
     def _build_snapshot(self, shift_state: ShiftState, shift_ended: bool) -> dict:
         driver_lat, driver_lon = self._graph_provider.node_coordinates(
             self.driver_state.current_node
@@ -377,6 +442,10 @@ class ShiftSimulatorEngine:
             ),
             "current_route": self._current_route,
             "recent_decisions": [d.model_dump() for d in self._recent_decisions[-5:]],
+            "incident_stats": {
+                "incidents_exposed": self._incidents_exposed,
+                "zones_crossed": list(self._incident_zones_crossed),
+            },
         }
 
 

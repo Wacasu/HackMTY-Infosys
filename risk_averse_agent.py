@@ -31,7 +31,7 @@ from __future__ import annotations
 import logging
 import math
 from dataclasses import dataclass
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from ortools.constraint_solver import pywrapcp, routing_enums_pb2
 
@@ -321,10 +321,91 @@ class RiskAverseAgent(BaseAgent):
         self._route_cost_matrix = tuple(tuple(row) for row in cost_matrix)
 
     def plan_route(self, driver_state: DriverState, active_orders: List[Offer]) -> List[int]:
-        """Usa la misma secuencia FIFO que el agente base.
+        """Resuelve el orden óptimo de entregas usando OR-Tools (TSP) sobre
+        la matriz de costos Te + alpha*Re precalculada en
+        `prepare_route_matrix`. Si solo hay un pedido activo, no hay nada
+        que optimizar; si OR-Tools no encuentra solución, cae a FIFO."""
+        if len(active_orders) <= 1:
+            return [order.order_id for order in active_orders]
 
-        Ambos repartidores recorren la misma politica de paradas y la misma
-        red vial; la diferencia entre modelos queda en aceptar pedidos y en
-        ponderar el riesgo, no en dibujar una ruta distinta.
-        """
-        return [order.order_id for order in active_orders]
+        if not self._route_cost_matrix or not self._route_stops:
+            return [order.order_id for order in active_orders]
+
+        return self._solve_ortools_sequence()
+
+    def _solve_ortools_sequence(self) -> List[int]:
+        """Construye y resuelve un modelo TSP con OR-Tools sobre la matriz
+        de costos precalculada, respetando precedencia pickup→dropoff."""
+        stops = self._route_stops
+        cost_matrix = self._route_cost_matrix
+        num_stops = len(stops) + 1  # +1 for depot (index 0)
+
+        manager = pywrapcp.RoutingIndexManager(num_stops, 1, 0)
+        routing = pywrapcp.RoutingModel(manager)
+
+        def cost_callback(from_index: int, to_index: int) -> int:
+            from_node = manager.IndexToNode(from_index)
+            to_node = manager.IndexToNode(to_index)
+            return int(cost_matrix[from_node][to_node])
+
+        transit_idx = routing.RegisterTransitCallback(cost_callback)
+        routing.SetArcCostAllVehicles(transit_idx)
+
+        pickup_to_dropoff: Dict[int, int] = {}
+        for i, stop in enumerate(stops):
+            node_idx = i + 1
+            if stop.is_pickup:
+                pickup_to_dropoff[stop.order_id] = node_idx
+        for i, stop in enumerate(stops):
+            node_idx = i + 1
+            if not stop.is_pickup:
+                pickup_node = pickup_to_dropoff.get(stop.order_id)
+                if pickup_node is not None:
+                    routing.solver().Add(
+                        routing.VehicleVar(node_idx) == routing.VehicleVar(pickup_node)
+                    )
+                    routing.solver().Add(
+                        routing.CumulVar(node_idx, transit_idx)
+                        >= routing.CumulVar(pickup_node, transit_idx)
+                    )
+
+        search_params = pywrapcp.DefaultRoutingSearchParameters()
+        search_params.first_solution_strategy = (
+            routing_enums_pb2.FirstSolutionStrategy.PATH_CHEAPEST_ARC
+        )
+        search_params.time_limit_ms = 1500
+
+        solution = routing.SolveWithParameters(search_params)
+        if solution is None:
+            logger.warning("OR-Tools no encontró solución; cayendo a FIFO.")
+            return list(dict.fromkeys(s.order_id for s in stops if s.is_pickup))
+
+        index = routing.Start(0)
+        ordered_order_ids: List[int] = []
+        visited_pickups: set[int] = set()
+        while not routing.IsEnd(index):
+            node = manager.IndexToNode(index)
+            if node > 0:
+                stop = stops[node - 1]
+                if stop.is_pickup and stop.order_id not in visited_pickups:
+                    ordered_order_ids.append(stop.order_id)
+                    visited_pickups.add(stop.order_id)
+            index = solution.Value(routing.NextVar(index))
+
+        return ordered_order_ids
+
+    def risk_penalty_factor(self) -> float:
+        """Factor de penalización de riesgo para el ruteo de aristas en el
+        grafo. Se deriva del alpha del agente y del estado ambiental más
+        reciente. Un valor de 0 produce la ruta más rápida; valores mayores
+        desvían el camino lejos de zonas de inundación."""
+        shift_state = self._last_shift_state
+        if shift_state is None:
+            return 0.0
+        rain_severity = max(
+            self._severity_for_event(shift_state, WeatherEvent.HEAVY_RAIN),
+            self._severity_for_event(shift_state, WeatherEvent.FLASH_FLOOD),
+        )
+        if rain_severity <= 0.0:
+            return 0.0
+        return self.alpha * rain_severity * 3.0
