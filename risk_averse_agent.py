@@ -351,6 +351,15 @@ class RiskAverseAgent(BaseAgent):
         transit_idx = routing.RegisterTransitCallback(cost_callback)
         routing.SetArcCostEvaluatorOfAllVehicles(transit_idx)
 
+        routing.AddDimension(
+            transit_idx,
+            0,
+            10_000_000,
+            True,
+            "time",
+        )
+        time_dim = routing.GetDimensionOrDie("time")
+
         pickup_to_dropoff: Dict[int, int] = {}
         for i, stop in enumerate(stops):
             node_idx = i + 1
@@ -361,19 +370,23 @@ class RiskAverseAgent(BaseAgent):
             if not stop.is_pickup:
                 pickup_node = pickup_to_dropoff.get(stop.order_id)
                 if pickup_node is not None:
+                    pickup_index = manager.NodeToIndex(pickup_node)
+                    dropoff_index = manager.NodeToIndex(node_idx)
                     routing.solver().Add(
-                        routing.VehicleVar(node_idx) == routing.VehicleVar(pickup_node)
+                        routing.VehicleVar(pickup_index)
+                        == routing.VehicleVar(dropoff_index)
                     )
                     routing.solver().Add(
-                        routing.CumulVar(node_idx, transit_idx)
-                        >= routing.CumulVar(pickup_node, transit_idx)
+                        time_dim.CumulVar(dropoff_index)
+                        >= time_dim.CumulVar(pickup_index)
                     )
 
         search_params = pywrapcp.DefaultRoutingSearchParameters()
         search_params.first_solution_strategy = (
             routing_enums_pb2.FirstSolutionStrategy.PATH_CHEAPEST_ARC
         )
-        search_params.time_limit_ms = 1500
+        search_params.time_limit.seconds = 1
+        search_params.time_limit.nanos = 500_000_000
 
         solution = routing.SolveWithParameters(search_params)
         if solution is None:
