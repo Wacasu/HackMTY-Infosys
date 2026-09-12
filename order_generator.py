@@ -42,6 +42,7 @@ MIN_TIME_WINDOW_SLACK_SEC = 600
 MAX_TIME_WINDOW_SLACK_SEC = 2400
 
 EARTH_RADIUS_KM = 6371.0
+CENTRO_MONTERREY_BOUNDS = (25.650, 25.695, -100.345, -100.285)
 
 
 def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -90,7 +91,8 @@ class OrderGenerator:
         """Fábrica asíncrona: genera coordenadas deterministas y las
         proyecta sobre el grafo real (I/O-bound vía OSMnx) antes de que el
         generador quede listo para usarse."""
-        instance = cls(random_seed=random_seed, shift_duration_sec=shift_duration_sec)
+        instance = cls(random_seed=random_seed,
+                       shift_duration_sec=shift_duration_sec)
         await instance._generate_and_project(graph_provider, num_orders)
         return instance
 
@@ -98,10 +100,9 @@ class OrderGenerator:
         self, graph_provider: CityGraphProvider, num_orders: int
     ) -> None:
         await graph_provider.ensure_loaded()
-        bounds = graph_provider.bounds
         rng = random.Random(self.random_seed)
 
-        raw_records = self._generate_solomon_style_records(rng, bounds, num_orders)
+        raw_records = self._generate_solomon_style_records(rng, num_orders)
 
         for record in raw_records:
             pickup_node = await graph_provider.nearest_node(
@@ -116,9 +117,8 @@ class OrderGenerator:
             # re-muestreando el dropoff para que el pedido tenga sentido.
             attempts = 0
             while dropoff_node == pickup_node and attempts < 5:
-                record["dropoff_lat"], record["dropoff_lon"] = self._random_point_in_bounds(
-                    rng, bounds
-                )
+                record["dropoff_lat"], record["dropoff_lon"] = self._random_point_in_center(
+                    rng)
                 dropoff_node = await graph_provider.nearest_node(
                     record["dropoff_lat"], record["dropoff_lon"]
                 )
@@ -131,7 +131,8 @@ class OrderGenerator:
                 record["dropoff_lon"],
             )
             base_fare = round(
-                BASE_PICKUP_FEE_MXN + FARE_PER_KM_MXN * max(straight_line_km, 0.3), 2
+                BASE_PICKUP_FEE_MXN + FARE_PER_KM_MXN *
+                max(straight_line_km, 0.3), 2
             )
 
             offer = Offer(
@@ -159,13 +160,14 @@ class OrderGenerator:
         )
 
     @staticmethod
-    def _random_point_in_bounds(rng: random.Random, bounds) -> tuple[float, float]:
-        lat = rng.uniform(bounds.min_lat, bounds.max_lat)
-        lon = rng.uniform(bounds.min_lon, bounds.max_lon)
+    def _random_point_in_center(rng: random.Random) -> tuple[float, float]:
+        min_lat, max_lat, min_lon, max_lon = CENTRO_MONTERREY_BOUNDS
+        lat = rng.uniform(min_lat, max_lat)
+        lon = rng.uniform(min_lon, max_lon)
         return lat, lon
 
     def _generate_solomon_style_records(
-        self, rng: random.Random, bounds, num_orders: int
+        self, rng: random.Random, num_orders: int
     ) -> List[dict]:
         """Genera registros con la misma semántica que un archivo Solomon
         VRPTW (customer_id, x, y, ready_time, due_date, service_time), pero
@@ -173,17 +175,19 @@ class OrderGenerator:
         bounding box de Monterrey."""
         records: List[dict] = []
         for order_id in range(1, num_orders + 1):
-            pickup_lat, pickup_lon = self._random_point_in_bounds(rng, bounds)
-            dropoff_lat, dropoff_lon = self._random_point_in_bounds(rng, bounds)
+            pickup_lat, pickup_lon = self._random_point_in_center(rng)
+            dropoff_lat, dropoff_lon = self._random_point_in_center(rng)
 
-            ready_time_sec = rng.randint(0, max(self.shift_duration_sec - 1800, 0))
+            ready_time_sec = rng.randint(
+                0, max(self.shift_duration_sec - 1800, 0))
             window_slack = rng.randint(
                 MIN_TIME_WINDOW_SLACK_SEC, MAX_TIME_WINDOW_SLACK_SEC
             )
             due_time_sec = min(
                 ready_time_sec + window_slack, self.shift_duration_sec
             )
-            service_time_sec = rng.randint(MIN_SERVICE_TIME_SEC, MAX_SERVICE_TIME_SEC)
+            service_time_sec = rng.randint(
+                MIN_SERVICE_TIME_SEC, MAX_SERVICE_TIME_SEC)
 
             records.append(
                 {
@@ -221,6 +225,10 @@ class OrderGenerator:
         """Recupera el objeto `Offer` tipado correspondiente a un pedido,
         para uso interno de los agentes y del motor de simulación."""
         return self._orders_by_id[order_id]
+
+    def list_orders(self) -> List[dict]:
+        """Todos los pedidos del turno, serializables para el mapa del panel."""
+        return [order.model_dump() for order in self._orders]
 
     @property
     def total_orders(self) -> int:

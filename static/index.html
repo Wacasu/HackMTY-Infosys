@@ -1,1011 +1,737 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="es">
-    <head>
-        <meta charset="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>The Courier — Simulador de Turno</title>
-        <style>
-            :root {
-                --bg: #0f1117;
-                --surface: #1a1d28;
-                --surface-2: #232735;
-                --border: #2e3344;
-                --text: #e8eaf0;
-                --text-dim: #8892a6;
-                --greedy-accent: #f59e0b;
-                --greedy-glow: rgba(245, 158, 11, 0.15);
-                --risk-accent: #14b8a6;
-                --risk-glow: rgba(20, 184, 166, 0.15);
-                --success: #22c55e;
-                --warning: #eab308;
-                --error: #ef4444;
-                --radius: 12px;
-            }
 
-            * {
-                margin: 0;
-                padding: 0;
-                box-sizing: border-box;
-            }
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>The Courier — Laboratorio visual</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap"
+    rel="stylesheet" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    :root {
+      --bg: #0e1116;
+      --bg-2: #161b22;
+      --bg-3: #1c232d;
+      --stroke: #2a3340;
+      --text: #e7ecf3;
+      --muted: #8b97a8;
+      --greedy: #e08a3c;
+      --smart: #3db8a0;
+      --danger: #d45d5d;
+      --ok: #6dbf7a;
+      --warn: #d4b15e;
+    }
 
-            body {
-                font-family:
-                    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-                    sans-serif;
-                background: var(--bg);
-                color: var(--text);
-                min-height: 100vh;
-                display: flex;
-                flex-direction: column;
-            }
+    * {
+      box-sizing: border-box;
+    }
 
-            /* ---------- Top bar ---------- */
-            .topbar {
-                display: flex;
-                align-items: center;
-                justify-content: space-between;
-                padding: 14px 28px;
-                background: var(--surface);
-                border-bottom: 1px solid var(--border);
-                flex-shrink: 0;
-            }
-            .topbar-title {
-                font-size: 18px;
-                font-weight: 700;
-                letter-spacing: -0.3px;
-            }
-            .topbar-title span {
-                color: var(--text-dim);
-                font-weight: 400;
-                font-size: 14px;
-            }
-            .topbar-status {
-                display: flex;
-                align-items: center;
-                gap: 16px;
-                font-size: 13px;
-                color: var(--text-dim);
-            }
-            .status-dot {
-                width: 8px;
-                height: 8px;
-                border-radius: 50%;
-                background: var(--text-dim);
-                transition: background 0.3s;
-            }
-            .status-dot.live {
-                background: var(--success);
-                box-shadow: 0 0 8px var(--success);
-            }
-            .status-dot.connecting {
-                background: var(--warning);
-                animation: pulse 1s infinite;
-            }
-            @keyframes pulse {
-                50% {
-                    opacity: 0.3;
-                }
-            }
+    html,
+    body {
+      margin: 0;
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "IBM Plex Sans", sans-serif;
+    }
 
-            /* ---------- Config overlay ---------- */
-            .overlay {
-                position: fixed;
-                inset: 0;
-                background: rgba(15, 17, 23, 0.92);
-                backdrop-filter: blur(6px);
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                z-index: 100;
-                transition: opacity 0.3s;
-            }
-            .overlay.hidden {
-                opacity: 0;
-                pointer-events: none;
-            }
-            .config-card {
-                background: var(--surface);
-                border: 1px solid var(--border);
-                border-radius: 16px;
-                padding: 36px 40px;
-                width: 480px;
-                max-width: 90vw;
-                box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5);
-            }
-            .config-card h2 {
-                font-size: 22px;
-                margin-bottom: 6px;
-            }
-            .config-card p {
-                color: var(--text-dim);
-                font-size: 14px;
-                margin-bottom: 24px;
-            }
-            .config-grid {
-                display: grid;
-                grid-template-columns: 1fr 1fr;
-                gap: 16px;
-            }
-            .config-field {
-                display: flex;
-                flex-direction: column;
-                gap: 6px;
-            }
-            .config-field.full {
-                grid-column: 1 / -1;
-            }
-            .config-field label {
-                font-size: 12px;
-                color: var(--text-dim);
-                text-transform: uppercase;
-                letter-spacing: 0.5px;
-            }
-            .config-field input {
-                background: var(--surface-2);
-                border: 1px solid var(--border);
-                border-radius: 8px;
-                padding: 10px 12px;
-                color: var(--text);
-                font-size: 14px;
-                outline: none;
-                transition: border-color 0.2s;
-            }
-            .config-field input:focus {
-                border-color: var(--risk-accent);
-            }
-            .btn-primary {
-                width: 100%;
-                margin-top: 24px;
-                padding: 14px;
-                border: none;
-                border-radius: 10px;
-                background: linear-gradient(
-                    135deg,
-                    var(--risk-accent),
-                    #0d9488
-                );
-                color: #fff;
-                font-size: 15px;
-                font-weight: 600;
-                cursor: pointer;
-                transition:
-                    transform 0.15s,
-                    box-shadow 0.2s;
-            }
-            .btn-primary:hover {
-                transform: translateY(-1px);
-                box-shadow: 0 8px 24px var(--risk-glow);
-            }
-            .btn-primary:active {
-                transform: translateY(0);
-            }
-            .btn-primary:disabled {
-                opacity: 0.5;
-                cursor: not-allowed;
-            }
+    button,
+    input {
+      font-family: inherit;
+    }
 
-            /* ---------- Event bar ---------- */
-            .event-bar {
-                display: flex;
-                align-items: center;
-                gap: 10px;
-                padding: 10px 28px;
-                background: var(--surface);
-                border-bottom: 1px solid var(--border);
-                flex-wrap: wrap;
-            }
-            .event-bar-label {
-                font-size: 12px;
-                color: var(--text-dim);
-                text-transform: uppercase;
-                letter-spacing: 0.5px;
-                margin-right: 4px;
-            }
-            .event-btn {
-                padding: 7px 14px;
-                border: 1px solid var(--border);
-                border-radius: 8px;
-                background: var(--surface-2);
-                color: var(--text);
-                font-size: 13px;
-                cursor: pointer;
-                transition: all 0.2s;
-            }
-            .event-btn:hover {
-                border-color: var(--warning);
-                background: rgba(234, 179, 8, 0.1);
-            }
-            .event-btn.clear:hover {
-                border-color: var(--success);
-                background: rgba(34, 197, 94, 0.1);
-            }
-            .event-btn:disabled {
-                opacity: 0.4;
-                cursor: not-allowed;
-            }
-            .severity-slider {
-                display: flex;
-                align-items: center;
-                gap: 8px;
-                margin-left: auto;
-                font-size: 13px;
-                color: var(--text-dim);
-            }
-            .severity-slider input[type="range"] {
-                width: 100px;
-                accent-color: var(--warning);
-            }
-            .env-display {
-                font-size: 13px;
-                color: var(--text-dim);
-                padding: 4px 12px;
-                background: var(--surface-2);
-                border-radius: 6px;
-                border: 1px solid var(--border);
-                min-width: 200px;
-                text-align: center;
-            }
+    .app {
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      height: 100%;
+    }
 
-            /* ---------- Split screen ---------- */
-            .split-screen {
-                display: grid;
-                grid-template-columns: 1fr 1fr;
-                gap: 1px;
-                background: var(--border);
-                flex: 1;
-                overflow: hidden;
-            }
-            .agent-panel {
-                background: var(--bg);
-                padding: 20px 24px;
-                overflow-y: auto;
-                display: flex;
-                flex-direction: column;
-                gap: 16px;
-            }
-            .agent-header {
-                display: flex;
-                align-items: center;
-                justify-content: space-between;
-            }
-            .agent-title {
-                display: flex;
-                align-items: center;
-                gap: 10px;
-            }
-            .agent-badge {
-                width: 10px;
-                height: 10px;
-                border-radius: 50%;
-            }
-            .agent-panel.greedy .agent-badge {
-                background: var(--greedy-accent);
-                box-shadow: 0 0 10px var(--greedy-glow);
-            }
-            .agent-panel.risk .agent-badge {
-                background: var(--risk-accent);
-                box-shadow: 0 0 10px var(--risk-glow);
-            }
-            .agent-name {
-                font-size: 16px;
-                font-weight: 700;
-            }
-            .agent-tag {
-                font-size: 11px;
-                color: var(--text-dim);
-                padding: 3px 8px;
-                border-radius: 6px;
-                background: var(--surface-2);
-                border: 1px solid var(--border);
-            }
-            .agent-panel.greedy {
-                border-top: 3px solid var(--greedy-accent);
-            }
-            .agent-panel.risk {
-                border-top: 3px solid var(--risk-accent);
-            }
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 12px 18px;
+      border-bottom: 1px solid var(--stroke);
+      background: var(--bg-2);
+    }
 
-            /* ---------- Stats grid ---------- */
-            .stats-grid {
-                display: grid;
-                grid-template-columns: repeat(3, 1fr);
-                gap: 10px;
-            }
-            .stat-card {
-                background: var(--surface);
-                border: 1px solid var(--border);
-                border-radius: var(--radius);
-                padding: 14px;
-                text-align: center;
-            }
-            .stat-value {
-                font-size: 24px;
-                font-weight: 700;
-                line-height: 1.2;
-            }
-            .agent-panel.greedy .stat-value {
-                color: var(--greedy-accent);
-            }
-            .agent-panel.risk .stat-value {
-                color: var(--risk-accent);
-            }
-            .stat-label {
-                font-size: 11px;
-                color: var(--text-dim);
-                text-transform: uppercase;
-                letter-spacing: 0.4px;
-                margin-top: 4px;
-            }
+    header h1 {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+    }
 
-            /* ---------- Section ---------- */
-            .section {
-                background: var(--surface);
-                border: 1px solid var(--border);
-                border-radius: var(--radius);
-                padding: 16px;
-            }
-            .section-title {
-                font-size: 12px;
-                color: var(--text-dim);
-                text-transform: uppercase;
-                letter-spacing: 0.5px;
-                margin-bottom: 10px;
-            }
+    header p {
+      margin: 2px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+    }
 
-            /* ---------- Current order ---------- */
-            .order-row {
-                display: flex;
-                justify-content: space-between;
-                font-size: 13px;
-                padding: 4px 0;
-            }
-            .order-row span:first-child {
-                color: var(--text-dim);
-            }
-            .order-empty {
-                font-size: 13px;
-                color: var(--text-dim);
-                text-align: center;
-                padding: 12px 0;
-            }
+    .status-pill {
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 11px;
+      padding: 6px 10px;
+      border: 1px solid var(--stroke);
+      background: var(--bg-3);
+      color: var(--muted);
+    }
 
-            /* ---------- Decisions list ---------- */
-            .decision {
-                display: flex;
-                align-items: flex-start;
-                gap: 8px;
-                padding: 8px 0;
-                border-bottom: 1px solid var(--border);
-                font-size: 12px;
-            }
-            .decision:last-child {
-                border-bottom: none;
-            }
-            .decision-icon {
-                width: 18px;
-                height: 18px;
-                border-radius: 50%;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                font-size: 10px;
-                font-weight: 700;
-                flex-shrink: 0;
-            }
-            .decision-icon.accept {
-                background: rgba(34, 197, 94, 0.15);
-                color: var(--success);
-            }
-            .decision-icon.reject {
-                background: rgba(239, 68, 68, 0.15);
-                color: var(--error);
-            }
-            .decision-icon.timeout {
-                background: rgba(234, 179, 8, 0.15);
-                color: var(--warning);
-            }
-            .decision-text {
-                flex: 1;
-                line-height: 1.4;
-            }
-            .decision-order {
-                color: var(--text-dim);
-                font-size: 11px;
-            }
+    .status-pill.running {
+      color: var(--ok);
+      border-color: #2e4a36;
+    }
 
-            /* ---------- Progress bar ---------- */
-            .progress-track {
-                height: 6px;
-                background: var(--surface-2);
-                border-radius: 3px;
-                overflow: hidden;
-            }
-            .progress-fill {
-                height: 100%;
-                border-radius: 3px;
-                transition: width 0.3s ease;
-            }
-            .agent-panel.greedy .progress-fill {
-                background: var(--greedy-accent);
-            }
-            .agent-panel.risk .progress-fill {
-                background: var(--risk-accent);
-            }
-            .progress-label {
-                display: flex;
-                justify-content: space-between;
-                font-size: 11px;
-                color: var(--text-dim);
-                margin-bottom: 6px;
-            }
+    .status-pill.loading {
+      color: var(--warn);
+      border-color: #4a3f24;
+    }
 
-            /* ---------- Comparison bar ---------- */
-            .comparison-bar {
-                display: flex;
-                align-items: center;
-                gap: 12px;
-                padding: 10px 28px;
-                background: var(--surface);
-                border-top: 1px solid var(--border);
-                font-size: 13px;
-                color: var(--text-dim);
-                flex-shrink: 0;
-            }
-            .comparison-bar strong {
-                color: var(--text);
-            }
-            .comparison-bar .winner-greedy {
-                color: var(--greedy-accent);
-            }
-            .comparison-bar .winner-risk {
-                color: var(--risk-accent);
-            }
+    .status-pill.error {
+      color: var(--danger);
+      border-color: #4a2a2a;
+    }
 
-            /* ---------- Responsive ---------- */
-            @media (max-width: 768px) {
-                .split-screen {
-                    grid-template-columns: 1fr;
-                }
-                .stats-grid {
-                    grid-template-columns: repeat(2, 1fr);
-                }
-                .config-grid {
-                    grid-template-columns: 1fr;
-                }
-            }
-        </style>
-    </head>
-    <body>
-        <!-- ========== Top bar ========== -->
-        <div class="topbar">
-            <div class="topbar-title">
-                The Courier
-                <span>— Simulador de Turno · HackMTY 2026 / Infosys</span>
-            </div>
-            <div class="topbar-status">
-                <span id="shift-clock">00:00:00 / 00:00:00</span>
-                <span id="connection-status"
-                    ><span class="status-dot" id="status-dot"></span>
-                    <span id="status-text">Desconectado</span></span
-                >
-            </div>
-        </div>
+    .event-banner {
+      display: none;
+      padding: 9px 14px;
+      border-bottom: 1px solid var(--stroke);
+      background: #3a2b1e;
+      color: #f4cf8a;
+      font: 500 12px "IBM Plex Mono", monospace;
+    }
 
-        <!-- ========== Event injection bar ========== -->
-        <div class="event-bar" id="event-bar" style="display: none">
-            <span class="event-bar-label">Inyectar evento:</span>
-            <button class="event-btn" data-event="HEAVY_RAIN" disabled>
-                Lluvia fuerte
-            </button>
-            <button class="event-btn" data-event="FLASH_FLOOD" disabled>
-                Inundación
-            </button>
-            <button class="event-btn" data-event="HEAVY_TRAFFIC" disabled>
-                Tráfico pesado
-            </button>
-            <button class="event-btn" data-event="EXTREME_HEAT" disabled>
-                Calor extremo
-            </button>
-            <button class="event-btn clear" data-event="CLEAR" disabled>
-                Limpiar
-            </button>
-            <div class="severity-slider">
-                <span>Severidad</span>
-                <input
-                    type="range"
-                    id="severity"
-                    min="0"
-                    max="100"
-                    value="70"
-                />
-                <span id="severity-val">0.70</span>
-            </div>
-            <div class="env-display" id="env-display">Clima: Despejado</div>
-        </div>
+    .event-banner.visible {
+      display: block;
+    }
 
-        <!-- ========== Split screen ========== -->
-        <div class="split-screen" id="split-screen" style="display: none">
-            <!-- Greedy panel -->
-            <div class="agent-panel greedy" id="panel-greedy">
-                <div class="agent-header">
-                    <div class="agent-title">
-                        <div class="agent-badge"></div>
-                        <div class="agent-name">Agente Base — Greedy</div>
-                    </div>
-                    <div class="agent-tag">alpha = 0.00</div>
-                </div>
+    .layout {
+      display: grid;
+      grid-template-columns: 280px minmax(0, 1fr) 320px;
+      min-height: 0;
+    }
 
-                <div>
-                    <div class="progress-label">
-                        <span>Progreso del turno</span
-                        ><span id="greedy-progress-text">0%</span>
-                    </div>
-                    <div class="progress-track">
-                        <div
-                            class="progress-fill"
-                            id="greedy-progress"
-                            style="width: 0%"
-                        ></div>
-                    </div>
-                </div>
+    aside,
+    .feed {
+      position: relative;
+      z-index: 2;
+      border-right: 1px solid var(--stroke);
+      overflow: auto;
+      padding: 14px;
+      background: var(--bg-2);
+    }
 
-                <div class="stats-grid">
-                    <div class="stat-card">
-                        <div class="stat-value" id="greedy-earnings">$0</div>
-                        <div class="stat-label">Ganancias</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-value" id="greedy-completed">0</div>
-                        <div class="stat-label">Completados</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-value" id="greedy-rejected">0</div>
-                        <div class="stat-label">Rechazados</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-value" id="greedy-timeouts">0</div>
-                        <div class="stat-label">Timeouts</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-value" id="greedy-distance">0 km</div>
-                        <div class="stat-label">Distancia</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-value" id="greedy-active">0</div>
-                        <div class="stat-label">Activos</div>
-                    </div>
-                </div>
+    .feed {
+      border-right: 0;
+      border-left: 1px solid var(--stroke);
+    }
 
-                <div class="section">
-                    <div class="section-title">Pedido en curso</div>
-                    <div id="greedy-current-order">
-                        <div class="order-empty">Sin pedido activo</div>
-                    </div>
-                </div>
+    .map-wrap {
+      position: relative;
+      z-index: 0;
+      min-height: 0;
+      min-width: 0;
+      overflow: hidden;
+    }
 
-                <div class="section">
-                    <div class="section-title">Decisiones recientes</div>
-                    <div id="greedy-decisions">
-                        <div class="order-empty">Esperando decisiones...</div>
-                    </div>
-                </div>
-            </div>
+    #map {
+      height: 100%;
+      min-height: 320px;
+      background: #cfd6de;
+    }
 
-            <!-- Risk-Averse panel -->
-            <div class="agent-panel risk" id="panel-risk">
-                <div class="agent-header">
-                    <div class="agent-title">
-                        <div class="agent-badge"></div>
-                        <div class="agent-name">
-                            Agente Inteligente — Risk-Averse
-                        </div>
-                    </div>
-                    <div class="agent-tag" id="risk-alpha-tag">
-                        alpha = 0.35
-                    </div>
-                </div>
+    label {
+      display: block;
+      font-size: 11px;
+      color: var(--muted);
+      margin: 10px 0 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
 
-                <div>
-                    <div class="progress-label">
-                        <span>Progreso del turno</span
-                        ><span id="risk-progress-text">0%</span>
-                    </div>
-                    <div class="progress-track">
-                        <div
-                            class="progress-fill"
-                            id="risk-progress"
-                            style="width: 0%"
-                        ></div>
-                    </div>
-                </div>
+    input[type="number"],
+    input[type="range"] {
+      width: 100%;
+    }
 
-                <div class="stats-grid">
-                    <div class="stat-card">
-                        <div class="stat-value" id="risk-earnings">$0</div>
-                        <div class="stat-label">Ganancias</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-value" id="risk-completed">0</div>
-                        <div class="stat-label">Completados</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-value" id="risk-rejected">0</div>
-                        <div class="stat-label">Rechazados</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-value" id="risk-timeouts">0</div>
-                        <div class="stat-label">Timeouts</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-value" id="risk-distance">0 km</div>
-                        <div class="stat-label">Distancia</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-value" id="risk-active">0</div>
-                        <div class="stat-label">Activos</div>
-                    </div>
-                </div>
+    input[type="number"] {
+      background: var(--bg);
+      border: 1px solid var(--stroke);
+      color: var(--text);
+      padding: 7px 8px;
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 12px;
+    }
 
-                <div class="section">
-                    <div class="section-title">Pedido en curso</div>
-                    <div id="risk-current-order">
-                        <div class="order-empty">Sin pedido activo</div>
-                    </div>
-                </div>
+    .row-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
 
-                <div class="section">
-                    <div class="section-title">Decisiones recientes</div>
-                    <div id="risk-decisions">
-                        <div class="order-empty">Esperando decisiones...</div>
-                    </div>
-                </div>
-            </div>
-        </div>
+    .actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 14px;
+    }
 
-        <!-- ========== Comparison bar ========== -->
-        <div class="comparison-bar" id="comparison-bar" style="display: none">
-            <span
-                >Comparación:
-                <strong id="cmp-greedy-earnings">$0</strong> (Greedy) vs
-                <strong id="cmp-risk-earnings">$0</strong> (Risk-Averse) —
-                <span id="cmp-winner">—</span></span
-            >
-        </div>
+    button {
+      border: 1px solid var(--stroke);
+      background: var(--bg-3);
+      color: var(--text);
+      padding: 8px 10px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 500;
+    }
 
-        <!-- ========== Config overlay ========== -->
-        <div class="overlay" id="config-overlay">
-            <div class="config-card">
-                <h2>The Courier — Simulador</h2>
-                <p>
-                    Configura los parámetros del turno y observa a dos
-                    repartidores competir en paralelo sobre la misma malla vial
-                    de Monterrey.
-                </p>
-                <div class="config-grid">
-                    <div class="config-field">
-                        <label>Semilla aleatoria</label>
-                        <input type="number" id="cfg-seed" value="42" />
-                    </div>
-                    <div class="config-field">
-                        <label>Número de pedidos</label>
-                        <input
-                            type="number"
-                            id="cfg-orders"
-                            value="40"
-                            min="1"
-                            max="500"
-                        />
-                    </div>
-                    <div class="config-field">
-                        <label>Duración del turno (seg)</label>
-                        <input
-                            type="number"
-                            id="cfg-duration"
-                            value="10800"
-                            min="60"
-                        />
-                    </div>
-                    <div class="config-field">
-                        <label>Intervalo de tick (seg)</label>
-                        <input type="number" id="cfg-tick" value="30" min="1" />
-                    </div>
-                    <div class="config-field">
-                        <label>Velocidad de reproducción (x)</label>
-                        <input
-                            type="number"
-                            id="cfg-speed"
-                            value="20"
-                            min="0.1"
-                            step="0.5"
-                        />
-                    </div>
-                    <div class="config-field">
-                        <label>Alpha (aversión al riesgo)</label>
-                        <input
-                            type="number"
-                            id="cfg-alpha"
-                            value="0.35"
-                            min="0"
-                            max="2"
-                            step="0.05"
-                        />
-                    </div>
-                </div>
-                <button class="btn-primary" id="start-btn">
-                    Iniciar simulación
-                </button>
-            </div>
-        </div>
+    button.primary {
+      background: #243044;
+      border-color: #35506c;
+    }
 
-        <script>
-            (function () {
-                "use strict";
+    button:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
 
-                let ws = null;
-                let sessionId = null;
-                let shiftDurationSec = 0;
+    .events {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+      margin-top: 8px;
+    }
 
-                // ---------- Helpers ----------
-                const $ = (id) => document.getElementById(id);
+    .events button {
+      font-size: 11px;
+    }
 
-                function fmtTime(sec) {
-                    const h = Math.floor(sec / 3600);
-                    const m = Math.floor((sec % 3600) / 60);
-                    const s = Math.floor(sec % 60);
-                    return [h, m, s]
-                        .map((v) => String(v).padStart(2, "0"))
-                        .join(":");
-                }
+    .legend {
+      position: absolute;
+      z-index: 500;
+      left: 12px;
+      bottom: 12px;
+      background: rgba(14, 17, 22, 0.88);
+      border: 1px solid var(--stroke);
+      padding: 8px 10px;
+      font-size: 11px;
+      color: var(--muted);
+    }
 
-                function fmtMoney(v) {
-                    return "$" + Number(v).toFixed(2);
-                }
+    .legend span {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      margin-right: 6px;
+      vertical-align: middle;
+    }
 
-                function setStatus(text, cls) {
-                    $("status-text").textContent = text;
-                    const dot = $("status-dot");
-                    dot.className = "status-dot " + (cls || "");
-                }
+    .agents {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      border-top: 1px solid var(--stroke);
+    }
 
-                // ---------- Config overlay ----------
-                $("start-btn").addEventListener("click", () => {
-                    const config = {
-                        random_seed: parseInt($("cfg-seed").value, 10),
-                        shift_duration_sec: parseInt(
-                            $("cfg-duration").value,
-                            10,
-                        ),
-                        num_orders: parseInt($("cfg-orders").value, 10),
-                        tick_interval_sec: parseInt($("cfg-tick").value, 10),
-                        time_scale: parseFloat($("cfg-speed").value),
-                        risk_alpha: parseFloat($("cfg-alpha").value),
-                    };
-                    startSimulation(config);
-                });
+    .agent {
+      padding: 12px 16px;
+      min-height: 168px;
+    }
 
-                // ---------- Severity slider ----------
-                $("severity").addEventListener("input", (e) => {
-                    $("severity-val").textContent = (
-                        e.target.value / 100
-                    ).toFixed(2);
-                });
+    .agent.greedy {
+      border-right: 1px solid var(--stroke);
+    }
 
-                // ---------- Event buttons ----------
-                document.querySelectorAll(".event-btn").forEach((btn) => {
-                    btn.addEventListener("click", () => {
-                        if (!ws || ws.readyState !== WebSocket.OPEN) return;
-                        ws.send(
-                            JSON.stringify({
-                                type: "inject_event",
-                                event_type: btn.dataset.event,
-                                severity:
-                                    parseInt($("severity").value, 10) / 100,
-                            }),
-                        );
-                    });
-                });
+    .agent h2 {
+      margin: 0 0 8px;
+      font-size: 13px;
+    }
 
-                // ---------- WebSocket ----------
-                function startSimulation(config) {
-                    $("start-btn").disabled = true;
-                    $("start-btn").textContent = "Conectando...";
-                    setStatus("Conectando...", "connecting");
+    .agent.greedy h2 {
+      color: var(--greedy);
+    }
 
-                    const proto = location.protocol === "https:" ? "wss" : "ws";
-                    ws = new WebSocket(
-                        `${proto}://${location.host}/ws/shift-simulation`,
-                    );
+    .agent.smart h2 {
+      color: var(--smart);
+    }
 
-                    ws.onopen = () => {
-                        setStatus("Conectado", "live");
-                        ws.send(JSON.stringify(config));
-                    };
+    .kpis {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+    }
 
-                    ws.onmessage = (evt) => {
-                        const msg = JSON.parse(evt.data);
-                        handleMessage(msg);
-                    };
+    .kpi {
+      background: var(--bg-2);
+      border: 1px solid var(--stroke);
+      padding: 8px;
+    }
 
-                    ws.onerror = () => {
-                        setStatus("Error de conexión", "");
-                        $("start-btn").disabled = false;
-                        $("start-btn").textContent = "Iniciar simulación";
-                    };
+    .kpi b {
+      display: block;
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 16px;
+      font-weight: 500;
+    }
 
-                    ws.onclose = () => {
-                        setStatus("Desconectado", "");
-                        $("start-btn").disabled = false;
-                        $("start-btn").textContent = "Iniciar simulación";
-                    };
-                }
+    .kpi span {
+      font-size: 10px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
 
-                // ---------- Message handler ----------
-                function handleMessage(msg) {
-                    switch (msg.type) {
-                        case "session_started":
-                            sessionId = msg.session_id;
-                            shiftDurationSec = msg.config.shift_duration_sec;
-                            $("config-overlay").classList.add("hidden");
-                            $("event-bar").style.display = "flex";
-                            $("split-screen").style.display = "grid";
-                            $("comparison-bar").style.display = "flex";
-                            document
-                                .querySelectorAll(".event-btn")
-                                .forEach((b) => (b.disabled = false));
-                            $("risk-alpha-tag").textContent =
-                                "alpha = " + msg.config.risk_alpha.toFixed(2);
-                            break;
+    .current {
+      margin-top: 8px;
+      font-size: 12px;
+      color: var(--muted);
+      min-height: 18px;
+    }
 
-                        case "tick":
-                            updateAgent(msg);
-                            updateClock(msg.shift_state);
-                            updateEnv(msg.shift_state);
-                            updateComparison();
-                            break;
+    .log {
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 11px;
+      line-height: 1.45;
+      color: var(--muted);
+    }
 
-                        case "shift_ended":
-                            updateAgent(msg);
-                            updateClock(msg.shift_state);
-                            updateComparison();
-                            break;
+    .log .accept {
+      color: var(--ok);
+    }
 
-                        case "event_ack":
-                            break;
+    .log .reject {
+      color: var(--danger);
+    }
 
-                        case "agent_finished":
-                            break;
+    .log .timeout {
+      color: var(--warn);
+    }
 
-                        case "session_complete":
-                            setStatus("Simulación completa", "live");
-                            break;
+    .log .event {
+      color: #f4cf8a;
+      border-left: 2px solid var(--warn);
+      padding-left: 6px;
+    }
 
-                        case "error":
-                            console.error("Server error:", msg.detail);
-                            break;
-                    }
-                }
+    canvas {
+      width: 100%;
+      height: 72px;
+      display: block;
+      margin-top: 10px;
+      background: var(--bg);
+      border: 1px solid var(--stroke);
+    }
 
-                // ---------- Update functions ----------
-                function updateAgent(msg) {
-                    const isGreedy = msg.agent_name === "greedy_base";
-                    const prefix = isGreedy ? "greedy" : "risk";
-                    const ds = msg.driver_state;
-                    const ss = msg.shift_state;
+    h3 {
+      margin: 0 0 8px;
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+  </style>
+</head>
 
-                    $(prefix + "-earnings").textContent = fmtMoney(
-                        ds.earnings_mxn,
-                    );
-                    $(prefix + "-completed").textContent = ds.orders_completed;
-                    $(prefix + "-rejected").textContent = ds.orders_rejected;
-                    $(prefix + "-timeouts").textContent = ds.timeouts_incurred;
-                    $(prefix + "-distance").textContent =
-                        ds.distance_traveled_km.toFixed(1) + " km";
-                    $(prefix + "-active").textContent = ds.active_orders.length;
+<body>
+  <div class="app">
+    <header>
+      <div>
+        <h1>The Courier</h1>
+        <p>Greedy vs. adverso al riesgo · mismo turno, misma malla vial de Monterrey</p>
+      </div>
+      <div id="status" class="status-pill">Listo para simular</div>
+    </header>
+    <div id="eventBanner" class="event-banner"></div>
 
-                    const pct = Math.min(
-                        100,
-                        (ss.elapsed_sec / ss.shift_duration_sec) * 100,
-                    );
-                    $(prefix + "-progress").style.width = pct + "%";
-                    $(prefix + "-progress-text").textContent =
-                        Math.round(pct) + "%";
-
-                    // Current order
-                    const orderEl = $(prefix + "-current-order");
-                    const co = msg.current_order_in_progress;
-                    if (co) {
-                        orderEl.innerHTML = `
-        <div class="order-row"><span>Pedido #${co.order_id}</span><span>${fmtMoney(co.base_fare_mxn)}</span></div>
-        <div class="order-row"><span>Distancia (recta)</span><span>${co.straight_line_distance_km.toFixed(2)} km</span></div>
-        <div class="order-row"><span>Ventana</span><span>${fmtTime(co.ready_time_sec)} – ${fmtTime(co.due_time_sec)}</span></div>
-        <div class="order-row"><span>Tiempo de servicio</span><span>${co.service_time_sec}s</span></div>
-      `;
-                    } else {
-                        orderEl.innerHTML =
-                            '<div class="order-empty">Sin pedido activo</div>';
-                    }
-
-                    // Decisions
-                    const decEl = $(prefix + "-decisions");
-                    const decisions = msg.recent_decisions || [];
-                    if (decisions.length === 0) {
-                        decEl.innerHTML =
-                            '<div class="order-empty">Esperando decisiones...</div>';
-                    } else {
-                        decEl.innerHTML = decisions
-                            .map((d) => {
-                                let iconClass = d.accepted
-                                    ? "accept"
-                                    : "reject";
-                                let icon = d.accepted ? "✓" : "✗";
-                                if (d.timed_out) {
-                                    iconClass = "timeout";
-                                    icon = "!";
-                                }
-                                return `
-          <div class="decision">
-            <div class="decision-icon ${iconClass}">${icon}</div>
-            <div class="decision-text">
-              <span class="decision-order">Pedido #${d.order_id}</span><br>
-              ${d.reasoning}
-            </div>
+    <div class="layout">
+      <aside>
+        <h3>Configuración</h3>
+        <div class="row-2">
+          <div>
+            <label>Semilla</label>
+            <input id="seed" type="number" value="42" />
           </div>
-        `;
-                            })
-                            .join("");
-                    }
-                }
+          <div>
+            <label>Pedidos</label>
+            <input id="orders" type="number" value="24" min="1" max="500" />
+          </div>
+          <div>
+            <label>Turno (s)</label>
+            <input id="duration" type="number" value="1800" min="60" />
+          </div>
+          <div>
+            <label>Tick (s)</label>
+            <input id="tick" type="number" value="30" min="5" />
+          </div>
+          <div>
+            <label>Velocidad</label>
+            <input id="speed" type="number" value="40" min="1" step="1" />
+          </div>
+          <div>
+            <label>Alpha</label>
+            <input id="alpha" type="number" value="0.35" min="0" step="0.05" />
+          </div>
+        </div>
+        <div class="actions">
+          <button id="start" class="primary">Iniciar turno</button>
+          <button id="stop" disabled>Detener</button>
+        </div>
 
-                function updateClock(ss) {
-                    $("shift-clock").textContent =
-                        fmtTime(ss.elapsed_sec) +
-                        " / " +
-                        fmtTime(ss.shift_duration_sec);
-                }
+        <h3 style="margin-top:22px">Evento sorpresa</h3>
+        <label>Severidad <b id="sevLabel">0.80</b></label>
+        <input id="severity" type="range" min="0" max="1" step="0.05" value="0.8" />
+        <div class="events">
+          <button data-event="HEAVY_RAIN">Lluvia</button>
+          <button data-event="FLASH_FLOOD">Inundación</button>
+          <button data-event="HEAVY_TRAFFIC">Tráfico</button>
+          <button data-event="EXTREME_HEAT">Calor</button>
+          <button data-event="CLEAR">Despejado</button>
+        </div>
+        <p id="envLine" style="margin-top:12px;font-size:12px;color:var(--muted)">Clima: CLEAR</p>
+        <p id="sessionLine"
+          style="margin:8px 0 0;font-size:11px;color:var(--muted);font-family:'IBM Plex Mono',monospace"></p>
+      </aside>
 
-                function updateEnv(ss) {
-                    const events = ss.active_events || ["CLEAR"];
-                    const labels = {
-                        CLEAR: "Despejado",
-                        HEAVY_RAIN: "Lluvia fuerte",
-                        FLASH_FLOOD: "Inundación",
-                        HEAVY_TRAFFIC: "Tráfico pesado",
-                        EXTREME_HEAT:
-                            "Calor extremo (" +
-                            ss.ambient_temperature_c.toFixed(0) +
-                            "°C)",
-                    };
-                    const parts = events.map((e) => labels[e] || e);
-                    let text = "Clima: " + parts.join(", ");
-                    if (ss.event_severity > 0)
-                        text += " (sev: " + ss.event_severity.toFixed(2) + ")";
-                    $("env-display").textContent = text;
-                }
+      <div class="map-wrap">
+        <div id="map"></div>
+        <div class="map-hud">
+          <strong>Centro de Monterrey</strong>
+          <span id="mapSummary">Macroplaza · Barrio Antiguo · rutas por calles</span>
+        </div>
+        <div class="legend">
+          <div><span style="background:var(--greedy)"></span>Greedy</div>
+          <div><span style="background:var(--smart)"></span>Risk-averse</div>
+          <div><span style="background:#6b7380"></span>Pickup / dropoff</div>
+          <div><span style="background:#d45d5d;opacity:.45"></span>Zona inundable</div>
+        </div>
+      </div>
 
-                function updateComparison() {
-                    const g =
-                        parseFloat(
-                            $("greedy-earnings").textContent.replace("$", ""),
-                        ) || 0;
-                    const r =
-                        parseFloat(
-                            $("risk-earnings").textContent.replace("$", ""),
-                        ) || 0;
-                    $("cmp-greedy-earnings").textContent = fmtMoney(g);
-                    $("cmp-risk-earnings").textContent = fmtMoney(r);
-                    const winnerEl = $("cmp-winner");
-                    if (g > r) {
-                        winnerEl.textContent = "Greedy va ganando";
-                        winnerEl.className = "winner-greedy";
-                    } else if (r > g) {
-                        winnerEl.textContent = "Risk-Averse va ganando";
-                        winnerEl.className = "winner-risk";
-                    } else {
-                        winnerEl.textContent = "Empate";
-                        winnerEl.className = "";
-                    }
-                }
-            })();
-        </script>
-    </body>
+      <div class="feed">
+        <h3>Decisiones recientes</h3>
+        <div id="log" class="log">Aún no hay decisiones.</div>
+        <h3 style="margin-top:18px">Ganancia (MXN)</h3>
+        <canvas id="chart" width="600" height="144"></canvas>
+      </div>
+    </div>
+
+    <div class="agents">
+      <section class="agent greedy">
+        <h2>Agente base · greedy_base (α = 0)</h2>
+        <div class="kpis" id="kpis-greedy"></div>
+        <div class="current" id="cur-greedy">Sin pedido en curso</div>
+      </section>
+      <section class="agent smart">
+        <h2>Agente inteligente · risk_averse_smart</h2>
+        <div class="kpis" id="kpis-smart"></div>
+        <div class="current" id="cur-smart">Sin pedido en curso</div>
+      </section>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    const AGENT_KEY = { greedy_base: "greedy", risk_averse_smart: "smart" };
+    const state = {
+      ws: null,
+      sessionId: null,
+      agents: {
+        greedy: emptyAgent(),
+        smart: emptyAgent(),
+      },
+      history: { greedy: [], smart: [] },
+      orders: [],
+      layers: { orders: [], zones: [], routes: [] },
+    };
+
+    function emptyAgent() {
+      return {
+        earnings: 0, completed: 0, rejected: 0, timeouts: 0, active: 0,
+        position: null, current: null, elapsed: 0, duration: 1, events: ["CLEAR"],
+        seenDecisions: new Set(),
+      };
+    }
+
+    const statusEl = document.getElementById("status");
+    const logEl = document.getElementById("log");
+    const map = L.map("map", { zoomControl: true }).setView([25.6714, -100.3092], 13.5);
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: "&copy; OpenStreetMap",
+      maxZoom: 19,
+    }).addTo(map);
+
+    const greedyMarker = L.circleMarker([25.6714, -100.3092], { radius: 9, color: "#e08a3c", fillColor: "#e08a3c", fillOpacity: 1, weight: 2 }).addTo(map).bindTooltip("Greedy");
+    const smartMarker = L.circleMarker([25.6714, -100.3092], { radius: 9, color: "#3db8a0", fillColor: "#3db8a0", fillOpacity: 1, weight: 2 }).addTo(map).bindTooltip("Risk-averse");
+    const depotMarker = L.circleMarker([25.6714, -100.3092], { radius: 6, color: "#e7ecf3", fillColor: "#0e1116", fillOpacity: 1, weight: 2 }).addTo(map).bindTooltip("Depósito");
+
+    document.getElementById("severity").addEventListener("input", (e) => {
+      document.getElementById("sevLabel").textContent = Number(e.target.value).toFixed(2);
+    });
+
+    document.getElementById("start").addEventListener("click", startSession);
+    document.getElementById("stop").addEventListener("click", stopSession);
+    document.querySelectorAll(".events button").forEach((btn) => {
+      btn.addEventListener("click", () => injectEvent(btn.dataset.event));
+    });
+
+    loadMeta();
+    renderKpis();
+
+    async function loadMeta() {
+      try {
+        const meta = await fetch("/meta").then((r) => r.json());
+        depotMarker.setLatLng([meta.depot.lat, meta.depot.lon]);
+        drawZones(meta.flood_zones || []);
+        map.setView([meta.depot.lat, meta.depot.lon], 13.5);
+        if (meta.graph_ready) {
+          if (!state.ws) setStatus("Grafo de Monterrey listo");
+        } else {
+          if (!state.ws) setStatus("Cargando grafo de Monterrey en segundo plano…", "loading");
+          setTimeout(loadMeta, 4000);
+        }
+      } catch (err) {
+        setStatus("No se pudo leer /meta", "error");
+      }
+    }
+
+    function setStatus(text, kind) {
+      statusEl.textContent = text;
+      statusEl.className = "status-pill" + (kind ? " " + kind : "");
+    }
+
+    function drawZones(zones) {
+      state.layers.zones.forEach((z) => map.removeLayer(z));
+      state.layers.zones = zones.map((z) =>
+        L.circle([z.lat, z.lon], {
+          radius: z.radius_km * 1000,
+          color: "#d45d5d",
+          weight: 1,
+          fillColor: "#d45d5d",
+          fillOpacity: 0.12,
+        }).addTo(map).bindTooltip(z.name)
+      );
+    }
+
+    function drawOrders(orders) {
+      state.layers.orders.forEach((m) => map.removeLayer(m));
+      state.layers.orders = [];
+      orders.forEach((o) => {
+        state.layers.orders.push(
+          L.circleMarker([o.pickup_lat, o.pickup_lon], { radius: 3, color: "#8b97a8", fillOpacity: 0.8, weight: 1 })
+            .addTo(map)
+            .bindTooltip("Pickup #" + o.order_id + " · $" + o.base_fare_mxn)
+        );
+        state.layers.orders.push(
+          L.circleMarker([o.dropoff_lat, o.dropoff_lon], { radius: 3, color: "#4d5663", fillOpacity: 0.7, weight: 1 })
+            .addTo(map)
+            .bindTooltip("Dropoff #" + o.order_id)
+        );
+      });
+    }
+
+    function startSession() {
+      stopSession();
+      state.agents = { greedy: emptyAgent(), smart: emptyAgent() };
+      state.history = { greedy: [], smart: [] };
+      logEl.textContent = "Conectando…";
+      setStatus("Conectando y generando pedidos…", "loading");
+      document.getElementById("start").disabled = true;
+      document.getElementById("stop").disabled = false;
+
+      const proto = location.protocol === "https:" ? "wss" : "ws";
+      const ws = new WebSocket(`${proto}://${location.host}/ws/shift-simulation`);
+      state.ws = ws;
+
+      ws.onopen = () => {
+        ws.send(JSON.stringify({
+          random_seed: Number(document.getElementById("seed").value),
+          shift_duration_sec: Number(document.getElementById("duration").value),
+          num_orders: Number(document.getElementById("orders").value),
+          tick_interval_sec: Number(document.getElementById("tick").value),
+          time_scale: Number(document.getElementById("speed").value),
+          risk_alpha: Number(document.getElementById("alpha").value),
+        }));
+      };
+      ws.onmessage = (ev) => handleMessage(JSON.parse(ev.data));
+      ws.onerror = () => setStatus("Error de WebSocket", "error");
+      ws.onclose = () => {
+        document.getElementById("start").disabled = false;
+        document.getElementById("stop").disabled = true;
+        if (statusEl.textContent.includes("Conectando") || statusEl.classList.contains("running")) {
+          setStatus("Sesión cerrada");
+        }
+      };
+    }
+
+    function stopSession() {
+      if (state.ws && state.ws.readyState === WebSocket.OPEN) {
+        state.ws.send(JSON.stringify({ type: "stop" }));
+        state.ws.close();
+      }
+      state.ws = null;
+    }
+
+    function injectEvent(eventType) {
+      if (!state.ws || state.ws.readyState !== WebSocket.OPEN) return;
+      state.ws.send(JSON.stringify({
+        type: "inject_event",
+        event_type: eventType,
+        severity: Number(document.getElementById("severity").value),
+      }));
+    }
+
+    function handleMessage(msg) {
+      if (msg.type === "session_started") {
+        state.sessionId = msg.session_id;
+        state.orders = msg.orders || [];
+        document.getElementById("sessionLine").textContent = "sesión " + msg.session_id.slice(0, 8) + " · " + msg.total_orders + " pedidos";
+        if (msg.depot) depotMarker.setLatLng([msg.depot.lat, msg.depot.lon]);
+        if (msg.flood_zones) drawZones(msg.flood_zones);
+        drawOrders(state.orders);
+        document.getElementById("mapSummary").textContent = `${state.orders.length} pedidos · rutas por calles · turno compartido`;
+        setStatus("Turno en curso", "running");
+        logEl.innerHTML = "";
+      } else if (msg.type === "tick" || msg.type === "shift_ended") {
+        applyTick(msg);
+      } else if (msg.type === "event_ack") {
+        showEvent(msg.event_type, msg.severity);
+        appendLog(`<span class="event">EVENTO ${msg.event_type} · severidad ${Number(msg.severity).toFixed(2)}</span>`);
+      } else if (msg.type === "session_complete") {
+        setStatus("Turno completo — compara ganancias y rechazos");
+      } else if (msg.type === "error") {
+        setStatus(msg.detail, "error");
+      }
+    }
+
+    function applyTick(msg) {
+      const key = AGENT_KEY[msg.agent_name];
+      if (!key) return;
+      const driver = msg.driver_state || {};
+      const shift = msg.shift_state || {};
+      const agent = state.agents[key];
+      agent.route = msg.current_route || [];
+      agent.earnings = driver.earnings_mxn || 0;
+      agent.completed = driver.orders_completed || 0;
+      agent.rejected = driver.orders_rejected || 0;
+      agent.timeouts = driver.timeouts_incurred || 0;
+      agent.active = (driver.active_orders || []).length;
+      agent.current = msg.current_order_in_progress;
+      agent.elapsed = shift.elapsed_sec || 0;
+      agent.duration = shift.shift_duration_sec || 1;
+      agent.events = shift.active_events || ["CLEAR"];
+      if (msg.driver_position) {
+        agent.position = msg.driver_position;
+        const marker = key === "greedy" ? greedyMarker : smartMarker;
+        marker.setLatLng([msg.driver_position.lat, msg.driver_position.lon]);
+      }
+      state.history[key].push({ t: agent.elapsed, y: agent.earnings });
+      if (state.history[key].length > 240) state.history[key].shift();
+      document.getElementById("envLine").textContent = "Clima: " + agent.events.join(", ") + " · t=" + formatMin(agent.elapsed);
+      renderKpis();
+      drawCurrentRoutes();
+      drawChart();
+      (msg.recent_decisions || []).forEach((d) => {
+        const fingerprint = `${msg.agent_name}:${d.order_id}:${d.accepted}:${d.timed_out}:${d.reasoning}`;
+        if (agent.seenDecisions.has(fingerprint)) return;
+        agent.seenDecisions.add(fingerprint);
+        const cls = d.timed_out ? "timeout" : d.accepted ? "accept" : "reject";
+        const verb = d.timed_out ? "TIMEOUT" : d.accepted ? "ACEPTA" : "RECHAZA";
+        appendLog(`<span class="${cls}">${msg.agent_name} ${verb} #${d.order_id}</span> score=${Number(d.score).toFixed(2)} — ${d.reasoning}`);
+      });
+    }
+
+    function drawCurrentRoutes() {
+      state.layers.routes.forEach((l) => map.removeLayer(l));
+      state.layers.routes = [];
+      [["greedy", "#e08a3c"], ["smart", "#3db8a0"]].forEach(([key, color]) => {
+        const route = state.agents[key].route;
+        if (!route.length) return;
+        const line = L.polyline(route.map((point) => [point.lat, point.lon]), {
+          color, weight: 4, opacity: 0.9, dashArray: "8 7",
+        }).addTo(map);
+        state.layers.routes.push(line);
+      });
+    }
+
+    function showEvent(eventType, severity) {
+      const banner = document.getElementById("eventBanner");
+      const labels = {
+        HEAVY_RAIN: "Lluvia intensa",
+        FLASH_FLOOD: "Inundacion",
+        HEAVY_TRAFFIC: "Trafico pesado",
+        EXTREME_HEAT: "Calor extremo",
+        CLEAR: "Clima despejado",
+      };
+      banner.textContent = `${labels[eventType] || eventType} activo · severidad ${Number(severity).toFixed(2)}`;
+      banner.classList.add("visible");
+      document.getElementById("envLine").textContent = `Clima: ${labels[eventType] || eventType} · severidad ${Number(severity).toFixed(2)}`;
+      if (eventType === "CLEAR") window.setTimeout(() => banner.classList.remove("visible"), 2200);
+    }
+
+    function renderKpis() {
+      ["greedy", "smart"].forEach((key) => {
+        const a = state.agents[key];
+        document.getElementById("kpis-" + key).innerHTML = [
+          kpi("$" + a.earnings.toFixed(2), "Ganancia"),
+          kpi(a.completed, "Completados"),
+          kpi(a.rejected, "Rechazados"),
+          kpi(a.timeouts, "Timeouts 2s"),
+        ].join("");
+        const cur = a.current;
+        document.getElementById("cur-" + key).textContent = cur
+          ? `Entregando #${cur.order_id} · $${cur.base_fare_mxn} · ${cur.straight_line_distance_km} km`
+          : (a.active ? `${a.active} pedidos en cola` : "Sin pedido en curso");
+      });
+    }
+
+    function kpi(value, label) {
+      return `<div class="kpi"><b>${value}</b><span>${label}</span></div>`;
+    }
+
+    function appendLog(html) {
+      const line = document.createElement("div");
+      line.innerHTML = html;
+      logEl.prepend(line);
+      while (logEl.children.length > 40) logEl.removeChild(logEl.lastChild);
+    }
+
+    function formatMin(sec) {
+      return (sec / 60).toFixed(1) + " min";
+    }
+
+    function drawChart() {
+      const canvas = document.getElementById("chart");
+      const ctx = canvas.getContext("2d");
+      const w = canvas.width;
+      const h = canvas.height;
+      ctx.clearRect(0, 0, w, h);
+      const series = [
+        { data: state.history.greedy, color: "#e08a3c" },
+        { data: state.history.smart, color: "#3db8a0" },
+      ];
+      const all = series.flatMap((s) => s.data);
+      if (!all.length) return;
+      const maxT = Math.max(...all.map((p) => p.t), 1);
+      const maxY = Math.max(...all.map((p) => p.y), 1);
+      series.forEach((s) => {
+        if (!s.data.length) return;
+        ctx.beginPath();
+        ctx.strokeStyle = s.color;
+        ctx.lineWidth = 2;
+        s.data.forEach((p, i) => {
+          const x = (p.t / maxT) * (w - 8) + 4;
+          const y = h - 6 - (p.y / maxY) * (h - 14);
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+      });
+    }
+  </script>
+</body>
+
 </html>
