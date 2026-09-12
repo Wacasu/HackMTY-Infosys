@@ -107,14 +107,6 @@ class CityGraphProvider:
             )
 
     @staticmethod
-<<<<<<< Updated upstream
-    def _build_graph_sync(place: str = MONTERREY_PLACE_NAME) -> nx.MultiDiGraph:
-        """Descarga el grafo vial de Monterrey y lo reduce al componente
-        fuertemente conexo más grande. Función síncrona por diseño: solo
-        debe ejecutarse dentro de `asyncio.to_thread`."""
-        raw_graph = ox.graph_from_place(place, network_type=MONTERREY_NETWORK_TYPE)
-        raw_graph = ox.add_edge_speeds(raw_graph, fallback=DEFAULT_FALLBACK_SPEED_KPH)
-=======
     def _build_graph_sync(
         center_lat: float = CENTRO_MONTERREY_LATITUDE,
         center_lon: float = CENTRO_MONTERREY_LONGITUDE,
@@ -128,7 +120,6 @@ class CityGraphProvider:
             (center_lat, center_lon), dist=radius_m, network_type=MONTERREY_NETWORK_TYPE)
         raw_graph = ox.add_edge_speeds(
             raw_graph, fallback=DEFAULT_FALLBACK_SPEED_KPH)
->>>>>>> Stashed changes
         raw_graph = ox.add_edge_travel_times(raw_graph)
 
         largest_scc_nodes = max(nx.strongly_connected_components(raw_graph), key=len)
@@ -226,8 +217,11 @@ class CityGraphProvider:
         path = nx.shortest_path(self._graph, origin_node, dest_node, weight="travel_time_sec")
         return tuple(path)
 
-<<<<<<< Updated upstream
-=======
+    async def route_coordinates(self, path: Tuple[int, ...]) -> Tuple[Tuple[float, float], ...]:
+        """Devuelve coordenadas (lat, lon) siguiendo la geometria de cada arista OSM."""
+        await self.ensure_loaded()
+        return await asyncio.to_thread(self._route_coordinates_sync, path)
+
     async def shortest_path_weighted(self, origin_node: int, dest_node: int, weight) -> Tuple[int, ...]:
         """Como `shortest_path`, pero con una función de costo por arista
         arbitraria (p. ej. Te + alpha*Re) en vez de solo tiempo de viaje.
@@ -293,8 +287,6 @@ class CityGraphProvider:
                 node = self._graph.nodes[destination]
                 coordinates.append((float(node["y"]), float(node["x"])))
         return tuple(coordinates)
-
->>>>>>> Stashed changes
     async def travel_time_matrix(
         self, nodes: Tuple[int, ...]
     ) -> Tuple[Tuple[float, ...], ...]:

@@ -62,6 +62,11 @@ class DriverState(BaseModel):
     distance_traveled_km: float = 0.0
     orders_completed: int = 0
     orders_rejected: int = 0
+    orders_delivered_late: int = Field(
+        0, description="De `orders_completed`, cuántos se entregaron después "
+        "de su `due_time_sec` -- se aceptaron dentro de su ventana, pero para "
+        "cuando les tocó turno en la cola del repartidor ya había vencido. "
+        "Antes no se distinguía de una entrega puntual en ningún KPI.")
     timeouts_incurred: int = 0
     active_orders: List[Offer] = Field(default_factory=list)
 

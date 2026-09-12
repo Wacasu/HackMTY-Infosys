@@ -38,13 +38,24 @@ BASE_PICKUP_FEE_MXN = 12.0
 FARE_PER_KM_MXN = 6.5
 MIN_SERVICE_TIME_SEC = 90
 MAX_SERVICE_TIME_SEC = 240
-MIN_TIME_WINDOW_SLACK_SEC = 600
-MAX_TIME_WINDOW_SLACK_SEC = 2400
+
+# Antes en 600-2400 (10-40 min). Un viaje típico en el grafo de 6km del
+# centro (acercarse al pickup + entregar) mide realistamente entre ~12 y
+# ~25 minutos reales -- medido en las decisiones registradas en pruebas
+# reales. Con un slack mínimo de solo 10 minutos, una buena parte de los
+# pedidos generados quedaban con una ventana de tiempo MATEMÁTICAMENTE
+# IMPOSIBLE de cumplir desde el instante en que aparecían (antes de
+# agregar el chequeo duro de factibilidad, esto se disimulaba entregando
+# tarde en silencio; con el chequeo, el agente los rechaza correctamente
+# -- pero eso significa que gran parte del turno no había NINGÚN pedido
+# aceptable, y el repartidor se quedaba parado). Subir el slack mínimo a
+# 20 min le da a la mayoría de los pedidos una ventana real de ser
+# cumplidos incluso con algo de cola por delante, sin dejar de tener
+# variedad (algunos pedidos siguen siendo más urgentes que otros).
+MIN_TIME_WINDOW_SLACK_SEC = 1200
+MAX_TIME_WINDOW_SLACK_SEC = 3000
 
 EARTH_RADIUS_KM = 6371.0
-<<<<<<< Updated upstream
-CENTRO_MONTERREY_BOUNDS = (25.650, 25.695, -100.345, -100.285)
-=======
 # Centro de Monterrey (Macroplaza y alrededores, ~4.5 km de medio-lado desde
 # el depósito) en vez de la zona metropolitana completa: acota las
 # pruebas/demos a una zona chica y siempre dentro del grafo vial que carga
@@ -52,7 +63,6 @@ CENTRO_MONTERREY_BOUNDS = (25.650, 25.695, -100.345, -100.285)
 # de margen para que ningún pedido caiga cerca del borde del grafo). Las
 # coordenadas se proyectan despues a calles reales.
 CENTRO_MONTERREY_BOUNDS = (25.6309, 25.7119, -100.3542, -100.2642)
->>>>>>> Stashed changes
 
 
 def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -118,24 +128,29 @@ class OrderGenerator:
             pickup_node = await graph_provider.nearest_node(
                 record["pickup_lat"], record["pickup_lon"]
             )
+            pickup_lat, pickup_lon = graph_provider.node_coordinates(pickup_node)
+            record["pickup_lat"] = pickup_lat
+            record["pickup_lon"] = pickup_lon
             dropoff_node = await graph_provider.nearest_node(
                 record["dropoff_lat"], record["dropoff_lon"]
             )
+            dropoff_lat, dropoff_lon = graph_provider.node_coordinates(dropoff_node)
+            record["dropoff_lat"] = dropoff_lat
+            record["dropoff_lon"] = dropoff_lon
 
             # Si el sorteo aleatorio coloca pickup y dropoff en el mismo
             # nodo (áreas urbanas densas), forzamos una separación mínima
             # re-muestreando el dropoff para que el pedido tenga sentido.
             attempts = 0
             while dropoff_node == pickup_node and attempts < 5:
-<<<<<<< Updated upstream
-                record["dropoff_lat"], record["dropoff_lon"] = self._random_point_in_center(
-=======
                 record["dropoff_lat"], record["dropoff_lon"] = self._random_point_in_centro(
->>>>>>> Stashed changes
                     rng)
                 dropoff_node = await graph_provider.nearest_node(
                     record["dropoff_lat"], record["dropoff_lon"]
                 )
+                dropoff_lat, dropoff_lon = graph_provider.node_coordinates(dropoff_node)
+                record["dropoff_lat"] = dropoff_lat
+                record["dropoff_lon"] = dropoff_lon
                 attempts += 1
 
             straight_line_km = _haversine_km(
@@ -174,11 +189,7 @@ class OrderGenerator:
         )
 
     @staticmethod
-<<<<<<< Updated upstream
-    def _random_point_in_center(rng: random.Random) -> tuple[float, float]:
-=======
     def _random_point_in_centro(rng: random.Random) -> tuple[float, float]:
->>>>>>> Stashed changes
         min_lat, max_lat, min_lon, max_lon = CENTRO_MONTERREY_BOUNDS
         lat = rng.uniform(min_lat, max_lat)
         lon = rng.uniform(min_lon, max_lon)
@@ -193,16 +204,44 @@ class OrderGenerator:
         bounding box de Monterrey."""
         records: List[dict] = []
         for order_id in range(1, num_orders + 1):
-<<<<<<< Updated upstream
-            pickup_lat, pickup_lon = self._random_point_in_center(rng)
-            dropoff_lat, dropoff_lon = self._random_point_in_center(rng)
-=======
             pickup_lat, pickup_lon = self._random_point_in_centro(rng)
             dropoff_lat, dropoff_lon = self._random_point_in_centro(rng)
->>>>>>> Stashed changes
 
-            ready_time_sec = rng.randint(
-                0, max(self.shift_duration_sec - 1800, 0))
+            # Reparte los `ready_time_sec` de forma pareja a lo largo del
+            # turno (con jitter chico), no uniforme al azar -- el azar puro
+            # deja bolsas de varios pedidos cayendo en el mismo tick de 30s
+            # con más frecuencia que un espaciado parejo, lo que fue la
+            # causa real de los "se queda pensando" por contención bajo
+            # ráfagas que se diagnosticó antes.
+            #
+            # El horizonte de liberación se recorta por
+            # `MIN_TIME_WINDOW_SLACK_SEC` (no por un margen fijo chico):
+            # así, sin importar qué tan tarde en el turno aparezca un
+            # pedido, SIEMPRE le queda espacio para AL MENOS el slack
+            # mínimo antes de que `due_time_sec = min(ready+slack,
+            # shift_duration_sec)` lo recorte más abajo -- se usa el
+            # mínimo, no el máximo, para no volver a juntar demasiados
+            # pedidos al inicio del turno (la ráfaga que motivó espaciar
+            # `ready_time_sec` parejo en primer lugar) en turnos cortos.
+            # Con un margen fijo de 300s como antes, un pedido que
+            # aparecía a 5 minutos del final del turno podía sortear un
+            # slack de hasta 40 min y terminar con una ventana real de
+            # apenas esos 5 minutos -- matemáticamente imposible de
+            # cumplir, sin importar qué tan bien decida el agente.
+            release_horizon_sec = max(
+                self.shift_duration_sec - MIN_TIME_WINDOW_SLACK_SEC, 0
+            )
+            if num_orders == 1:
+                ready_time_sec = 0
+            else:
+                release_position = (order_id - 1) / (num_orders - 1)
+                jitter_sec = rng.randint(-30, 30)
+                ready_time_sec = int(
+                    max(0, min(
+                        release_horizon_sec,
+                        release_position * release_horizon_sec + jitter_sec,
+                    ))
+                )
             window_slack = rng.randint(
                 MIN_TIME_WINDOW_SLACK_SEC, MAX_TIME_WINDOW_SLACK_SEC
             )

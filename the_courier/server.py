@@ -50,6 +50,7 @@ from city_graph import CityGraphProvider, get_city_graph_provider, peek_city_gra
 from greedy_agent import GreedyAgent
 from order_generator import OrderGenerator
 from risk_averse_agent import RiskAverseAgent
+from risk_model import ACCIDENT_HOTSPOTS, FLOOD_PRONE_ZONES
 
 logger = logging.getLogger("the_courier.server")
 logging.basicConfig(level=logging.INFO)
@@ -83,6 +84,40 @@ MAX_BATCH_ORDERS_FOR_ROUTE_PLANNING = 3
 # hilo huérfano deje de trabajar en el acto.
 ROUTE_PLANNING_TIMEOUT_SEC = 3.0
 
+# Tope de pedidos ACEPTADOS que un repartidor puede traer sin entregar a la
+# vez. Sin este límite, un agente podía seguir aceptando ofertas nuevas con
+# buen pago por minuto EN AISLAMIENTO sin considerar que ya trae una cola
+# larga -- cada aceptación nueva empuja a las más viejas más atrás en el
+# batch de planificación (ver MAX_BATCH_ORDERS_FOR_ROUTE_PLANNING), y un
+# pedido que no es de los `MAX_BATCH_ORDERS_FOR_ROUTE_PLANNING` más urgentes
+# puede quedarse esperando turno indefinidamente mientras llegan pedidos
+# más urgentes -- entregándose, cuando por fin le toca, muy después de que
+# venció su ventana de tiempo (medido en pruebas reales: hasta 26 minutos
+# tarde), sin que el modelo lo reconozca ni lo evite. Este tope se aplica
+# ANTES de pasarle la oferta al agente -- es una restricción de capacidad
+# del repartidor, no una decisión de negocio, así que se centraliza aquí en
+# vez de duplicarse en cada agente.
+#
+# 3 (= MAX_BATCH_ORDERS_FOR_ROUTE_PLANNING) se probó primero, pero midiendo
+# en vivo resultó demasiado ajustado: como el umbral de rentabilidad de
+# Risk-averse es más bajo que el de Greedy (acepta más fácil por diseño --
+# ver MIN_ACCEPTABLE_RISK_ADJUSTED_MXN_PER_MINUTE vs
+# MIN_ACCEPTABLE_MXN_PER_MINUTE), llenaba sus 3 cupos casi de inmediato y se
+# quedaba "lleno" la mayor parte del turno -- en una prueba controlada
+# (clima despejado, mismo seed), el 75% de sus rechazos eran solo por cupo
+# lleno, contra ~33% en Greedy, dejándolo sistemáticamente sin poder tomar
+# pedidos mejores que llegaban después. Subirlo a 5 le da más margen para
+# seguir aceptando sin reabrir el problema original (5 pedidos en cola
+# sigue siendo un tope finito, y el KPI "Tarde" ya reporta honestamente
+# cualquier entrega que de todos modos llegue fuera de ventana, en vez de
+# depender de que el tope la prevenga por completo).
+MAX_CONCURRENT_ACTIVE_ORDERS = 5
+
+# Construidos a partir de la MISMA fuente que usa `risk_model.py` para
+# calcular el riesgo de verdad (antes esto era una lista fabricada aparte,
+# desincronizada de lo que el modelo realmente usaba para decidir) -- ver
+# las citas de datos oficiales en risk_model.py junto a `FLOOD_PRONE_ZONES`
+# y `ACCIDENT_HOTSPOTS`.
 FLOOD_ZONE_PAYLOAD = [
     {
         "name": name,
@@ -91,14 +126,19 @@ FLOOD_ZONE_PAYLOAD = [
         "radius_km": radius_km,
         "base_severity": base_severity,
     }
-    for name, lat, lon, radius_km, base_severity in (
-        ("Puente del Papa / Río Santa Catarina", 25.6690, -100.3550, 1.2, 0.9),
-        ("Distribuidor Gonzalitos", 25.6825, -100.3505, 1.0, 0.8),
-        ("Av. Morones Prieto bajo Puente Constitución",
-         25.6640, -100.3320, 1.0, 0.85),
-        ("Cruce Av. Revolución / Río Santa Catarina", 25.6555, -100.3610, 1.0, 0.75),
-        ("Paso a Desnivel Cumbres", 25.7100, -100.3800, 1.3, 0.6),
-    )
+    for name, lat, lon, radius_km, base_severity in FLOOD_PRONE_ZONES
+]
+
+ACCIDENT_HOTSPOT_PAYLOAD = [
+    {
+        "name": name,
+        "lat": lat,
+        "lon": lon,
+        "radius_km": radius_km,
+        "base_severity": base_severity,
+        "accident_count": accident_count,
+    }
+    for name, lat, lon, radius_km, base_severity, accident_count in ACCIDENT_HOTSPOTS
 ]
 
 
@@ -228,13 +268,10 @@ class ShiftSimulatorEngine:
         self._seen_order_ids: set[int] = set()
         self._current_order: Optional[Offer] = None
         self._remaining_time_sec: float = 0.0
-<<<<<<< Updated upstream
-=======
         self._route_travel_sec: float = 0.0
         self._route_elapsed_sec: float = 0.0
         self._travel_to_pickup_sec: float = 0.0
         self._route_nodes: List[int] = []
->>>>>>> Stashed changes
         self._current_route: List[dict] = []
         self._recent_decisions: List[AgentDecision] = []
         # Versión de `LiveEnvironment` vigente cuando se calculó la ruta
@@ -260,13 +297,12 @@ class ShiftSimulatorEngine:
     async def _tick(self, elapsed_sec: int) -> dict:
         shift_state = self._current_shift_state(elapsed_sec)
 
+        pending_order_ids = []
         for order_dict in self._order_generator.get_pending_orders(elapsed_sec):
             order_id = order_dict["order_id"]
             if order_id in self._seen_order_ids:
                 continue
             self._seen_order_ids.add(order_id)
-<<<<<<< Updated upstream
-=======
             pending_order_ids.append(order_id)
         # Secuencial a propósito, NO `asyncio.gather`: evaluar una oferta es
         # trabajo CPU-bound (Dijkstra sobre la malla vial real), y NetworkX
@@ -282,7 +318,6 @@ class ShiftSimulatorEngine:
         # corriendo en paralelo ENTRE SÍ (son tareas asyncio separadas); acá
         # solo se serializan las ofertas DENTRO de un mismo motor.
         for order_id in pending_order_ids:
->>>>>>> Stashed changes
             await self._evaluate_new_offer(order_id, shift_state)
 
         if self._current_order is None and self.driver_state.active_orders:
@@ -292,8 +327,9 @@ class ShiftSimulatorEngine:
 
         if self._current_order is not None:
             self._remaining_time_sec -= self._config.tick_interval_sec
+            self._advance_visual_position(self._config.tick_interval_sec)
             if self._remaining_time_sec <= 0:
-                self._complete_current_order()
+                self._complete_current_order(completed_at_sec=elapsed_sec)
 
         self.driver_state.current_time_sec = elapsed_sec
         return self._build_snapshot(shift_state, shift_ended=False)
@@ -311,6 +347,29 @@ class ShiftSimulatorEngine:
 
     async def _evaluate_new_offer(self, order_id: int, shift_state: ShiftState) -> None:
         offer = self._order_generator.get_offer(order_id)
+
+        # Restricción de capacidad, aplicada ANTES de ofrecerle el pedido
+        # al agente: con la cola ya llena, ni siquiera se evalúa el pago --
+        # ver `MAX_CONCURRENT_ACTIVE_ORDERS` sobre por qué.
+        if len(self.driver_state.active_orders) >= MAX_CONCURRENT_ACTIVE_ORDERS:
+            decision = AgentDecision(
+                order_id=order_id,
+                accepted=False,
+                score=0.0,
+                estimated_travel_time_sec=0.0,
+                reasoning=(
+                    f"Rechazado: ya trae {len(self.driver_state.active_orders)} pedidos "
+                    f"activos sin entregar (máximo {MAX_CONCURRENT_ACTIVE_ORDERS}); debe "
+                    "completar alguno antes de aceptar más, sin importar qué tan bien pague."
+                ),
+                decision_latency_ms=0.0,
+            )
+            self._recent_decisions.append(decision)
+            if len(self._recent_decisions) > MAX_RECENT_DECISIONS_KEPT:
+                self._recent_decisions.pop(0)
+            self.driver_state.orders_rejected += 1
+            return
+
         started_at = time.perf_counter()
         try:
             decision = await asyncio.wait_for(
@@ -353,14 +412,6 @@ class ShiftSimulatorEngine:
 
     async def _advance_route_plan(self, shift_state: ShiftState) -> None:
         active_orders = self.driver_state.active_orders
-<<<<<<< Updated upstream
-        if isinstance(self.agent, RiskAverseAgent):
-            await self.agent.prepare_route_matrix(self.driver_state, active_orders)
-
-        order_sequence = await asyncio.to_thread(
-            self.agent.plan_route, self.driver_state, active_orders
-        )
-=======
         prepare_route_matrix = getattr(self.agent, "prepare_route_matrix", None)
 
         # Optimizar entre TODOS los pedidos activos es O(N^2) Dijkstra reales
@@ -393,7 +444,6 @@ class ShiftSimulatorEngine:
             )
             order_sequence = [o.order_id for o in batch_orders]
 
->>>>>>> Stashed changes
         if not order_sequence:
             return
 
@@ -464,32 +514,23 @@ class ShiftSimulatorEngine:
         )
 
         route_nodes = pickup_path + dropoff_path[1:]
-<<<<<<< Updated upstream
-=======
         route_coordinates = await self._graph_provider.route_coordinates(tuple(route_nodes))
->>>>>>> Stashed changes
         self._current_route = [
-            {
-                "lat": self._graph_provider.node_coordinates(node_id)[0],
-                "lon": self._graph_provider.node_coordinates(node_id)[1],
-            }
-            for node_id in route_nodes
+            {"lat": latitude, "lon": longitude}
+            for latitude, longitude in route_coordinates
         ]
-<<<<<<< Updated upstream
-=======
         self._route_nodes = list(route_nodes)
         self._travel_to_pickup_sec = max(travel_to_pickup_sec, 0.0)
         self._route_travel_sec = max(travel_to_pickup_sec + travel_to_dropoff_sec, 0.0)
         self._route_elapsed_sec = 0.0
         self._route_environment_version = self._environment.version
->>>>>>> Stashed changes
 
         self._current_order = offer
         self._remaining_time_sec = (
             travel_to_pickup_sec + travel_to_dropoff_sec + offer.service_time_sec
         )
 
-    def _complete_current_order(self) -> None:
+    def _complete_current_order(self, completed_at_sec: int) -> None:
         offer = self._current_order
         assert offer is not None
 
@@ -500,24 +541,55 @@ class ShiftSimulatorEngine:
             self.driver_state.distance_traveled_km + offer.straight_line_distance_km, 2
         )
         self.driver_state.orders_completed += 1
+        # Se aceptó dentro de su ventana (o ya no se ofrecería), pero puede
+        # que para cuando de verdad le tocó turno en la cola ya haya
+        # vencido -- eso es una entrega tarde de verdad, y se cuenta en vez
+        # de tratarla igual que una a tiempo (antes no había forma de
+        # distinguirlas, así que un pedido entregado 26 minutos tarde se
+        # veía idéntico a uno puntual en todos los KPIs).
+        if completed_at_sec > offer.due_time_sec:
+            self.driver_state.orders_delivered_late += 1
         self.driver_state.current_node = offer.dropoff_node
         self.driver_state.active_orders = [
             o for o in self.driver_state.active_orders if o.order_id != offer.order_id
         ]
         self._current_order = None
         self._remaining_time_sec = 0.0
-<<<<<<< Updated upstream
-=======
         self._route_travel_sec = 0.0
         self._route_elapsed_sec = 0.0
         self._travel_to_pickup_sec = 0.0
         self._route_nodes = []
->>>>>>> Stashed changes
         self._current_route = []
+
+    def _advance_visual_position(self, elapsed_sec: float) -> None:
+        """Avanza `driver_state.current_node` a lo largo de `_route_nodes`
+        proporcionalmente al tiempo transcurrido en este tick, para que el
+        repartidor se vea moverse tramo a tramo mientras dura el pedido en
+        vez de teletransportarse al dropoff cuando termina."""
+        if not self._route_nodes or self._route_travel_sec <= 0:
+            return
+        self._route_elapsed_sec = min(
+            self._route_elapsed_sec + elapsed_sec, self._route_travel_sec
+        )
+        progress = self._route_elapsed_sec / self._route_travel_sec
+        route_index = min(
+            int(progress * (len(self._route_nodes) - 1)),
+            len(self._route_nodes) - 1,
+        )
+        self.driver_state.current_node = self._route_nodes[route_index]
 
     def _build_snapshot(self, shift_state: ShiftState, shift_ended: bool) -> dict:
         driver_lat, driver_lon = self._graph_provider.node_coordinates(
             self.driver_state.current_node
+        )
+        # Le dice al frontend si el pedido en curso ya fue recogido (viajando
+        # al dropoff) o si el repartidor todavía va en camino al pickup --
+        # así el mapa puede animar el punto de recogida en el momento exacto
+        # en que se "levanta" el paquete, no solo cuando se acepta la oferta.
+        pickup_reached = (
+            self._route_elapsed_sec >= self._travel_to_pickup_sec
+            if self._current_order is not None
+            else None
         )
         return {
             "type": "shift_ended" if shift_ended else "tick",
@@ -529,6 +601,7 @@ class ShiftSimulatorEngine:
             "current_order_in_progress": (
                 self._current_order.model_dump() if self._current_order else None
             ),
+            "pickup_reached": pickup_reached,
             "current_route": self._current_route,
             "recent_decisions": [d.model_dump() for d in self._recent_decisions[-5:]],
         }
@@ -588,6 +661,7 @@ async def simulation_meta() -> dict:
     return {
         "depot": {"lat": DEPOT_LATITUDE, "lon": DEPOT_LONGITUDE},
         "flood_zones": FLOOD_ZONE_PAYLOAD,
+        "accident_hotspots": ACCIDENT_HOTSPOT_PAYLOAD,
         "graph_ready": graph_ready,
         "bounds": bounds_payload,
     }
@@ -693,6 +767,7 @@ async def shift_simulation_ws(websocket: WebSocket) -> None:
             "orders": order_generator.list_orders(),
             "depot": {"lat": DEPOT_LATITUDE, "lon": DEPOT_LONGITUDE},
             "flood_zones": FLOOD_ZONE_PAYLOAD,
+            "accident_hotspots": ACCIDENT_HOTSPOT_PAYLOAD,
         }
     )
 
@@ -704,12 +779,32 @@ async def shift_simulation_ws(websocket: WebSocket) -> None:
         await snapshot_queue.put({"type": "agent_finished", "agent_name": engine.agent.name})
 
     async def forward_snapshots_to_client() -> None:
+        # Empareja los snapshots de los dos motores por elapsed_sec antes de
+        # mandarlos: si uno se transmitiera en cuanto llega, un motor podria
+        # adelantarse varios ticks al otro en tiempo real (uno tarda mas
+        # que el otro en decidir/rerutear ese tick en particular) y el
+        # split-screen se veria "desincronizado" -- justo el "no se
+        # reproducen a la par" reportado antes.
         finished_agents = 0
+        pending_ticks: dict[tuple[int, str], dict[str, dict]] = {}
         while finished_agents < 2:
             snapshot = await snapshot_queue.get()
-            await websocket.send_json(snapshot)
             if snapshot.get("type") == "agent_finished":
                 finished_agents += 1
+                continue
+
+            shift_state = snapshot.get("shift_state", {})
+            tick_key = (
+                int(shift_state.get("elapsed_sec", 0)),
+                snapshot.get("type", "tick"),
+            )
+            tick_snapshots = pending_ticks.setdefault(tick_key, {})
+            tick_snapshots[snapshot["agent_name"]] = snapshot
+
+            if len(tick_snapshots) == 2:
+                for agent_name in ("greedy_base", "risk_averse_smart"):
+                    await websocket.send_json(tick_snapshots[agent_name])
+                del pending_ticks[tick_key]
         await websocket.send_json({"type": "session_complete", "session_id": session_id})
 
     async def listen_for_client_commands() -> None:
@@ -746,11 +841,34 @@ async def shift_simulation_ws(websocket: WebSocket) -> None:
 
     all_tasks = producer_tasks + [forwarding_task, command_task]
     try:
-        done, pending = await asyncio.wait(all_tasks, return_when=asyncio.FIRST_COMPLETED)
-        for task in done:
-            exception = task.exception()
-            if exception is not None and not isinstance(exception, WebSocketDisconnect):
-                raise exception
+        # OJO: no basta un solo `asyncio.wait(..., FIRST_COMPLETED)` sobre
+        # TODAS las tareas. Los dos motores casi nunca terminan su
+        # `pump_engine` en el mismo instante real -- uno tarda más que el
+        # otro por tick, sobre todo el inteligente cuando replanifica ruta
+        # -- así que el que terminaba primero (con su turno completo, sin
+        # ningún error) disparaba igual el FIRST_COMPLETED de un `wait` de
+        # una sola pasada, y el `finally` de abajo cancelaba TODO de
+        # inmediato: el OTRO motor a la mitad de su turno, y
+        # `forwarding_task` antes de que alcanzara a mandar los últimos
+        # ticks emparejados o el "session_complete". Eso era exactamente
+        # la sesión "parándose sola": terminaba en cuanto CUALQUIERA de
+        # los dos agentes acababa su turno, no cuando de verdad terminaban
+        # los dos. Ahora se sigue esperando mientras lo único que termina
+        # son motores SIN error (esperado y normal): la sesión de verdad
+        # concluye solo cuando el cliente pide parar o se desconecta
+        # (`command_task`), cuando `forwarding_task` ya emparejó y mandó
+        # TODOS los ticks de ambos motores más `session_complete`, o
+        # cuando algo truena de verdad.
+        remaining = set(all_tasks)
+        while True:
+            done, remaining = await asyncio.wait(remaining, return_when=asyncio.FIRST_COMPLETED)
+            should_stop = forwarding_task in done or command_task in done
+            for task in done:
+                exception = task.exception()
+                if exception is not None and not isinstance(exception, WebSocketDisconnect):
+                    raise exception
+            if should_stop or not remaining:
+                break
     except WebSocketDisconnect:
         logger.info("Cliente desconectado de la sesión %s.", session_id)
     finally:

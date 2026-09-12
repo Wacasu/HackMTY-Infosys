@@ -45,6 +45,7 @@ from agent_interface import (
 )
 from city_graph import CityGraphProvider
 from risk_model import SAFETY_HARD_RISK_LIMIT
+from risk_model import candidate_pickup_origins
 from risk_model import point_risk as _shared_point_risk
 from risk_model import route_risk_and_time as _shared_route_risk_and_time
 from risk_model import weighted_route_risk
@@ -52,11 +53,49 @@ from risk_model import weighted_route_risk
 logger = logging.getLogger("the_courier.risk_averse_agent")
 
 # Cuántos "minutos equivalentes" de penalización representa un riesgo
-# máximo (Re = 1.0) antes de multiplicarse por alpha.
-RISK_PENALTY_MINUTES_AT_MAX_RISK = 45.0
+# máximo (Re = 1.0) antes de multiplicarse por alpha. Se usa UNA VEZ por
+# viaje completo en `evaluate_offer`/`_solve_pdptw` (decisión de aceptar y
+# secuenciar pedidos) -- ahí SÍ tiene sentido como cuota fija por viaje,
+# independiente de su duración.
+#
+# Antes en 45.0: con lluvia activa, `point_risk` sube el riesgo AMBIENTAL
+# (no solo cerca de zonas inundables -- en TODA la ciudad) a ~0.33 con
+# severidad 0.8. A alpha=0.35, eso ya son 0.35*0.33*45 ≈ 5.2 min de
+# penalización sobre CUALQUIER viaje, en cualquier parte -- medido en vivo,
+# esto bastaba para tumbar la rentabilidad de casi todos los pedidos por
+# debajo del umbral y el agente rechazaba el 100% (40/40) en cuanto había
+# lluvia, sin aceptar ni uno solo -- lo opuesto a "más cauteloso", más bien
+# "deja de operar por completo". El límite duro de seguridad
+# (SAFETY_HARD_RISK_LIMIT, en risk_model.py) ya se encarga de rechazar sin
+# excepción las rutas genuinamente peligrosas (cerca de una zona
+# inundable); este penalty solo debe desalentar marginalmente los tramos
+# de riesgo ambiental parejo, no anular el negocio entero.
+RISK_PENALTY_MINUTES_AT_MAX_RISK = 20.0
+
+# Cuánto se infla proporcionalmente el tiempo PERCIBIDO de una arista bajo
+# riesgo máximo (Re=1.0) y alpha=1.0, usado SOLO por `risk_weighted_path`
+# para elegir la ruta física real arista por arista -- deliberadamente
+# distinto de RISK_PENALTY_MINUTES_AT_MAX_RISK (que es una cuota fija por
+# VIAJE completo, no por arista): sumar una cuota fija a cada arista sesga
+# a Dijkstra hacia rutas con menos tramos aunque sean más lentas en total,
+# incluso con riesgo uniforme. Ver el comentario en `risk_weighted_path`.
+RISK_TIME_INFLATION_AT_MAX_RISK = 4.0
 
 # Rentabilidad mínima aceptable en MXN por minuto ajustado por riesgo.
-MIN_ACCEPTABLE_RISK_ADJUSTED_MXN_PER_MINUTE = 2.5
+#
+# A propósito IGUAL al umbral de Greedy (`greedy_agent.MIN_ACCEPTABLE_MXN_PER_MINUTE`
+# = 3.0), no más bajo. Antes era 2.5: con clima despejado, el término de
+# riesgo (alpha * Re_ambiental * RISK_PENALTY_MINUTES_AT_MAX_RISK ≈
+# 0.35*0.05*45 ≈ 0.8 min) es casi nulo, así que ese umbral más bajo NO
+# reflejaba "tolera más riesgo" -- reflejaba "acepta ofertas más flojas en
+# general", sin importar el riesgo. Eso hacía que aceptara más pedidos de
+# los que alcanzaba a entregar en el turno (medido en vivo: 8 aceptados,
+# solo 3 completados, 5 atorados en cola sin cobrar nada), perdiendo
+# contra Greedy por pura sobre-aceptación, no por ser "más seguro". Con el
+# mismo umbral base, la única diferencia real entre los dos agentes vuelve
+# a ser cómo manejan el riesgo -- que es precisamente lo que este proyecto
+# se propone comparar -- no cuál es más permisivo en general.
+MIN_ACCEPTABLE_RISK_ADJUSTED_MXN_PER_MINUTE = 3.0
 
 MIN_TRAVEL_TIME_FLOOR_SEC = 30.0
 
@@ -104,32 +143,7 @@ class RiskAverseAgent(BaseAgent):
     # una comparación justa entre los dos agentes -- ver ahí el porqué).
     # ------------------------------------------------------------------ #
     def _point_risk(self, lat: float, lon: float, shift_state: ShiftState) -> float:
-<<<<<<< Updated upstream
-        """Riesgo puntual [0, 1] en una coordenada dada, bajo las
-        condiciones ambientales actuales del turno."""
-        rain_severity = max(
-            self._severity_for_event(shift_state, WeatherEvent.HEAVY_RAIN),
-            self._severity_for_event(shift_state, WeatherEvent.FLASH_FLOOD),
-        )
-        traffic_severity = self._severity_for_event(shift_state, WeatherEvent.HEAVY_TRAFFIC)
-        heat_severity = self._severity_for_event(shift_state, WeatherEvent.EXTREME_HEAT)
-
-        risk = 0.05  # riesgo ambiental base (Monterrey, tráfico ordinario)
-        risk += 0.35 * rain_severity
-        risk += 0.15 * traffic_severity
-        risk += 0.08 * heat_severity
-
-        if rain_severity > 0.0:
-            for _name, zone_lat, zone_lon, radius_km, zone_base_severity in FLOOD_PRONE_ZONES:
-                distance_km = _haversine_km(lat, lon, zone_lat, zone_lon)
-                if distance_km <= radius_km:
-                    proximity_factor = 1.0 - (distance_km / radius_km)
-                    risk += proximity_factor * zone_base_severity * rain_severity
-
-        return max(0.0, min(risk, 1.0))
-=======
         return _shared_point_risk(lat, lon, shift_state)
->>>>>>> Stashed changes
 
     async def _route_risk_and_time(
         self, origin_node: int, dest_node: int, shift_state: ShiftState
@@ -183,17 +197,8 @@ class RiskAverseAgent(BaseAgent):
         if self.alpha <= 0.0:
             return await self._graph_provider.shortest_path(origin_node, dest_node)
 
-<<<<<<< Updated upstream
-        point_risks = [
-            self._point_risk(graph.nodes[node]["y"], graph.nodes[node]["x"], shift_state)
-            for node in sampled_nodes
-        ]
-        average_risk = sum(point_risks) / len(point_risks) if point_risks else 0.05
-        return average_risk, travel_time_sec
-=======
         node_risk = self._node_risk_map(shift_state)
         alpha = self.alpha
-        penalty_sec = RISK_PENALTY_MINUTES_AT_MAX_RISK * 60.0
 
         def edge_weight(u: int, v: int, edge_datas: dict) -> float:
             best = min(
@@ -204,12 +209,28 @@ class RiskAverseAgent(BaseAgent):
             if not math.isfinite(travel_time_sec):
                 return float("inf")
             edge_risk = (node_risk.get(u, 0.05) + node_risk.get(v, 0.05)) / 2.0
-            return travel_time_sec + alpha * edge_risk * penalty_sec
+            # PROPORCIONAL al tiempo real del tramo, NO una cuota fija por
+            # arista. Sumar una constante fija por arista (como se hacía
+            # antes) sesga a Dijkstra hacia rutas con MENOS tramos aunque
+            # sean más lentas en total -- incluso con riesgo uniforme (sin
+            # ningún evento activo, cada nodo mide exactamente el mismo
+            # 0.05 ambiental), porque cada arista adicional paga la misma
+            # penalización sin importar cuánto dure. Medido en vivo: eso
+            # hacía que Risk-averse manejara rutas reales más lentas que el
+            # camino más rápido incluso en clima despejado -- sin ganar
+            # ninguna seguridad real a cambio (no hay ninguna zona más
+            # riesgosa que evitar si el riesgo es parejo en todos lados) --
+            # y perdía rendimiento frente a Greedy solo por eso. Escalado
+            # por `travel_time_sec`, un riesgo uniforme infla TODAS las
+            # aristas por el mismo factor proporcional (no cambia qué ruta
+            # es más rápida), y solo cuando el riesgo varía de verdad entre
+            # tramos (p. ej. una zona inundable durante lluvia) el desvío
+            # se vuelve realmente más barato que atravesarla.
+            return travel_time_sec * (1.0 + alpha * edge_risk * RISK_TIME_INFLATION_AT_MAX_RISK)
 
         return await self._graph_provider.shortest_path_weighted(
             origin_node, dest_node, edge_weight
         )
->>>>>>> Stashed changes
 
     # ------------------------------------------------------------------ #
     # Evaluación de ofertas
@@ -223,10 +244,23 @@ class RiskAverseAgent(BaseAgent):
         # independientes entre sí: evaluarlas en paralelo en vez de en fila
         # es la diferencia entre ~2x y ~1x el costo de un solo Dijkstra
         # dentro del presupuesto de 200 ms por decisión.
-        (risk_to_pickup, time_to_pickup_sec), (risk_delivery, time_delivery_sec) = await asyncio.gather(
-            self._route_risk_and_time(driver_state.current_node, offer.pickup_node, shift_state),
+        #
+        # La pierna de recogida, además, se evalúa desde varios orígenes
+        # candidatos (posición actual + dropoffs de pedidos ya aceptados) y
+        # se queda con el más barato: si este pickup cae cerca de un
+        # dropoff que el repartidor ya trae en curso, la decisión lo debe
+        # reflejar como "casi gratis llegar" en vez de medirlo siempre
+        # desde la posición física de ESTE instante, que puede estar del
+        # otro lado de la ciudad mientras termina lo que ya trae.
+        candidate_origins = candidate_pickup_origins(driver_state, offer)
+        pickup_leg_results, (risk_delivery, time_delivery_sec) = await asyncio.gather(
+            asyncio.gather(*(
+                self._route_risk_and_time(origin, offer.pickup_node, shift_state)
+                for origin in candidate_origins
+            )),
             self._route_risk_and_time(offer.pickup_node, offer.dropoff_node, shift_state),
         )
+        risk_to_pickup, time_to_pickup_sec = min(pickup_leg_results, key=lambda pair: pair[1])
 
         total_travel_sec = max(
             time_to_pickup_sec + time_delivery_sec + offer.service_time_sec,
@@ -246,13 +280,31 @@ class RiskAverseAgent(BaseAgent):
         meets_profitability_bar = (
             risk_adjusted_score >= MIN_ACCEPTABLE_RISK_ADJUSTED_MXN_PER_MINUTE
         )
-        accepted = meets_profitability_bar and not hard_safety_violation
+
+        # Factibilidad dura: si ni siquiera arrancando AHORA MISMO (sin
+        # contar ningún otro pedido ya en cola) se llega a tiempo, no hay
+        # rentabilidad que lo justifique -- aceptarlo sería prometer una
+        # entrega que ya sabe que va a incumplir. Antes no existía este
+        # chequeo: se aceptaban ofertas rentables sin importar si la
+        # ventana de tiempo ya era matemáticamente imposible, lo que
+        # producía pedidos entregados hasta 26 minutos tarde sin que el
+        # modelo lo reconociera.
+        projected_completion_sec = driver_state.current_time_sec + total_travel_sec
+        infeasible = projected_completion_sec > offer.due_time_sec
+
+        accepted = meets_profitability_bar and not hard_safety_violation and not infeasible
 
         net_profit_estimate = offer.base_fare_mxn - (
             weighted_risk * OPERATIONAL_RISK_COST_MXN_PER_RISK_UNIT
         )
 
-        if hard_safety_violation:
+        if infeasible:
+            reasoning = (
+                f"Rechazado: no llegaría a tiempo -- completaría en el segundo "
+                f"{projected_completion_sec:.0f} pero la ventana vence en el "
+                f"{offer.due_time_sec}, aun arrancando de inmediato."
+            )
+        elif hard_safety_violation:
             reasoning = (
                 f"Rechazado: riesgo de ruta {weighted_risk:.2f} supera el límite duro de "
                 f"seguridad {SAFETY_HARD_RISK_LIMIT:.2f} (posibles inundaciones en el trayecto), "
@@ -330,21 +382,27 @@ class RiskAverseAgent(BaseAgent):
         risk_matrix: List[List[float]] = [[0.0] * len(nodes) for _ in range(len(nodes))]
         time_matrix = await self._graph_provider.travel_time_matrix(tuple(nodes))
 
-        # Todas las parejas (i, j) se resuelven en paralelo: en secuencia,
-        # cada una despacha su propio `shortest_path` a un hilo y un
-        # `await` en fila puede estancar el tick de este motor frente al
-        # del agente Greedy (que no paga este costo), rompiendo el
-        # emparejamiento tick-a-tick del split-screen en `server.py`.
+        # Secuencial A PROPÓSITO, NO `asyncio.gather` -- esto solía
+        # despachar las hasta 42 parejas (3 pedidos activos = 7 nodos) en
+        # paralelo, pero cada una es Dijkstra puro-Python (GIL-bound) sobre
+        # el grafo real: "paralelizar" con gather no las corre de verdad en
+        # paralelo, solo hace que 42 hilos se turnen el mismo núcleo, y el
+        # overhead de cambio de contexto entre tantos hilos terminaba
+        # constando MÁS que resolverlas una por una (medido en vivo: la
+        # versión con gather disparaba seguido el timeout duro de
+        # `ROUTE_PLANNING_TIMEOUT_SEC` -- 3+ segundos reales de "freeze"
+        # visible en el mapa -- mientras que en secuencia cada pareja tarda
+        # ~15-30ms, bien por debajo de ese límite incluso con 42 de ellas).
+        # Mismo diagnóstico y mismo arreglo que ya se aplicó al loop de
+        # evaluación de ofertas en `server.py::_tick`.
         pairs = [
             (i, j, origin, dest)
             for i, origin in enumerate(nodes)
             for j, dest in enumerate(nodes)
             if i != j
         ]
-        risk_results = await asyncio.gather(
-            *(self._route_risk_and_time(origin, dest, shift_state) for _, _, origin, dest in pairs)
-        )
-        for (i, j, _, _), (risk, _) in zip(pairs, risk_results):
+        for i, j, origin, dest in pairs:
+            risk, _ = await self._route_risk_and_time(origin, dest, shift_state)
             risk_matrix[i][j] = risk
 
         cost_matrix: List[List[int]] = []
@@ -365,42 +423,6 @@ class RiskAverseAgent(BaseAgent):
         self._route_cost_matrix = tuple(tuple(row) for row in cost_matrix)
 
     def plan_route(self, driver_state: DriverState, active_orders: List[Offer]) -> List[int]:
-<<<<<<< Updated upstream
-        """Resuelve un PDPTW de un solo vehículo con Google OR-Tools sobre
-        la matriz de costos Te + alpha*Re precalculada por
-        `prepare_route_matrix`. Devuelve la secuencia de `order_id` en el
-        orden en que deben entregarse (cada order_id aparece una sola vez,
-        en el momento de su dropoff)."""
-        if not active_orders:
-            return []
-
-        if not self._route_cost_matrix or len(self._route_stops) != 2 * len(active_orders):
-            raise RuntimeError(
-                "plan_route requiere una matriz de costos vigente: llama a "
-                "`await prepare_route_matrix(driver_state, active_orders)` primero."
-            )
-
-        num_locations = len(self._route_stops) + 1  # +1 por el depot (índice 0)
-        manager = pywrapcp.RoutingIndexManager(num_locations, 1, 0)
-        routing = pywrapcp.RoutingModel(manager)
-
-        def cost_callback(from_index: int, to_index: int) -> int:
-            from_node = manager.IndexToNode(from_index)
-            to_node = manager.IndexToNode(to_index)
-            return self._route_cost_matrix[from_node][to_node]
-
-        transit_callback_index = routing.RegisterTransitCallback(cost_callback)
-        routing.SetArcCostEvaluatorOfAllVehicles(transit_callback_index)
-
-        horizon_sec = max(
-            (stop.time_window_end_sec for stop in self._route_stops), default=3600
-        ) + 3600
-        routing.AddDimension(
-            transit_callback_index,
-            horizon_sec,
-            horizon_sec,
-            False,
-=======
         """Orden en que se atienden los pedidos activos.
 
         Con 0 o 1 pedido no hay nada que decidir. Con 2+ resuelve un
@@ -482,48 +504,10 @@ class RiskAverseAgent(BaseAgent):
             int(RISK_PENALTY_MINUTES_AT_MAX_RISK * 60.0 * 4),  # holgura (slack)
             int(24 * 3600),  # tope acumulado por vehículo
             True,  # el acumulado empieza en 0 en la posición actual
->>>>>>> Stashed changes
             "Time",
         )
         time_dimension = routing.GetDimensionOrDie("Time")
 
-<<<<<<< Updated upstream
-        for stop_offset, stop in enumerate(self._route_stops):
-            node_index = stop_offset + 1  # el índice 0 es el depot
-            routing_index = manager.NodeToIndex(node_index)
-            time_dimension.CumulVar(routing_index).SetRange(
-                max(stop.time_window_start_sec, 0), max(stop.time_window_end_sec, 1)
-            )
-
-        pickup_index_by_order = {
-            stop.order_id: offset + 1
-            for offset, stop in enumerate(self._route_stops)
-            if stop.is_pickup
-        }
-        dropoff_index_by_order = {
-            stop.order_id: offset + 1
-            for offset, stop in enumerate(self._route_stops)
-            if not stop.is_pickup
-        }
-
-        solver = routing.solver()
-        for order in active_orders:
-            pickup_node_index = pickup_index_by_order[order.order_id]
-            dropoff_node_index = dropoff_index_by_order[order.order_id]
-            pickup_routing_index = manager.NodeToIndex(pickup_node_index)
-            dropoff_routing_index = manager.NodeToIndex(dropoff_node_index)
-
-            routing.AddPickupAndDelivery(pickup_routing_index, dropoff_routing_index)
-            solver.Add(
-                routing.VehicleVar(pickup_routing_index)
-                == routing.VehicleVar(dropoff_routing_index)
-            )
-            solver.Add(
-                time_dimension.CumulVar(pickup_routing_index)
-                <= time_dimension.CumulVar(dropoff_routing_index)
-            )
-
-=======
         base_time_sec = driver_state.current_time_sec
         order_index = {order.order_id: i for i, order in enumerate(active_orders)}
         for order in active_orders:
@@ -539,54 +523,44 @@ class RiskAverseAgent(BaseAgent):
                 time_dimension.CumulVar(pickup_idx) <= time_dimension.CumulVar(dropoff_idx)
             )
 
-            due_sec = max(0, order.due_time_sec - base_time_sec)
-            time_dimension.CumulVar(pickup_idx).SetRange(0, due_sec)
-            time_dimension.CumulVar(dropoff_idx).SetRange(0, due_sec)
+            # Ventana [ready_time, due_time] relativa al instante actual del
+            # turno, no solo el límite superior: un PDPTW completo respeta
+            # ambos extremos. En la práctica todo pedido en `active_orders`
+            # ya está "listo" para cuando llega aquí (se aceptó porque su
+            # ready_time ya había pasado), así que el límite inferior casi
+            # siempre queda en 0 -- se deja explícito de todos modos por
+            # completitud del modelo.
+            ready_sec = max(0, order.ready_time_sec - base_time_sec)
+            due_sec = max(ready_sec, order.due_time_sec - base_time_sec)
+            time_dimension.CumulVar(pickup_idx).SetRange(ready_sec, due_sec)
+            time_dimension.CumulVar(dropoff_idx).SetRange(ready_sec, due_sec)
 
->>>>>>> Stashed changes
         search_parameters = pywrapcp.DefaultRoutingSearchParameters()
         search_parameters.first_solution_strategy = (
             routing_enums_pb2.FirstSolutionStrategy.PATH_CHEAPEST_ARC
         )
-<<<<<<< Updated upstream
+        # Búsqueda local guiada además de la heurística de primera solución:
+        # con instancias tan chicas (tope de MAX_BATCH_ORDERS_FOR_ROUTE_PLANNING
+        # pedidos activos por lote, ver server.py) sobra presupuesto de
+        # tiempo para que mejore la solución inicial en vez de quedarse con
+        # la primera que encuentra -- rutas mejores, no solo factibles.
         search_parameters.local_search_metaheuristic = (
             routing_enums_pb2.LocalSearchMetaheuristic.GUIDED_LOCAL_SEARCH
         )
-        search_parameters.time_limit.FromMilliseconds(150)
-
-        solution = routing.SolveWithParameters(search_parameters)
-        if solution is None:
-            logger.warning(
-                "OR-Tools no encontró solución factible para %d pedidos activos; "
-                "se usa orden FIFO como respaldo seguro.",
-                len(active_orders),
-            )
-            return [order.order_id for order in active_orders]
-
-        ordered_order_ids: List[int] = []
-        seen_order_ids: set[int] = set()
-        index = routing.Start(0)
-        while not routing.IsEnd(index):
-            node_index = manager.IndexToNode(index)
-            if node_index != 0:
-                stop = self._route_stops[node_index - 1]
-                if not stop.is_pickup and stop.order_id not in seen_order_ids:
-                    ordered_order_ids.append(stop.order_id)
-                    seen_order_ids.add(stop.order_id)
-            index = solution.Value(routing.NextVar(index))
-
-        for order in active_orders:
-            if order.order_id not in seen_order_ids:
-                ordered_order_ids.append(order.order_id)
-
-        return ordered_order_ids
-=======
         search_parameters.time_limit.FromMilliseconds(300)
 
         solution = routing.SolveWithParameters(search_parameters)
         if solution is None:
             raise RuntimeError("OR-Tools no encontro una solucion factible para el PDPTW.")
 
+        # OJO: se registra el order_id la PRIMERA vez que aparece en la ruta
+        # (su nodo de RECOGIDA, que siempre precede a su entrega) -- no la
+        # última. El motor de simulación solo consume `sequence[0]` como "el
+        # próximo pedido a recoger y entregar antes de replanificar", así
+        # que el orden correcto es por recogida, no por entrega: si se
+        # armara por entrega, en una ruta que intercala recogidas (p. ej.
+        # recoger A, recoger B, entregar A, entregar B) el motor terminaría
+        # yendo primero al pedido equivocado.
         node_to_order_id = {1 + 2 * i: order.order_id for i, order in enumerate(active_orders)}
         sequence: List[int] = []
         seen: set[int] = set()
@@ -602,4 +576,3 @@ class RiskAverseAgent(BaseAgent):
         if len(sequence) != len(active_orders):
             raise RuntimeError("La solucion de OR-Tools no visito todos los pedidos activos.")
         return sequence
->>>>>>> Stashed changes
