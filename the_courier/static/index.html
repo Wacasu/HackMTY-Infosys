@@ -12,1455 +12,1299 @@
     rel="stylesheet" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
+    /* ==========================================================
+       THE COURIER — sala de control
+       Tema oscuro de alto contraste: pensado para proyectarse en
+       una sala de jueces, no para leerse a 30 cm en una laptop.
+       Todo el color que existe en la pantalla significa algo:
+       ámbar = agente Greedy, turquesa = agente Risk-averse,
+       rojo = riesgo real medido sobre datos del municipio.
+       ========================================================== */
+
     :root {
-      --bg: #0b0e14;
-      --bg-2: #131824;
-      --bg-3: #1a2130;
-      --bg-4: #212a3c;
-      --stroke: #262e3f;
-      --text: #eef2f8;
-      --muted: #8b97ab;
-      --muted-2: #647089;
-      --greedy: #f0954a;
-      --greedy-soft: rgba(240, 149, 74, .16);
-      --smart: #35c4a6;
-      --smart-soft: rgba(53, 196, 166, .16);
-      --danger: #ef6969;
-      --ok: #58d68d;
-      --warn: #f0c05a;
-      --radius: 10px;
-      --radius-sm: 7px;
+      --bg: #070A11;
+      --bg-grad-a: #0A0F1B;
+      --bg-grad-b: #070A11;
+      --panel: #101725;
+      --panel-2: #141C2D;
+      --panel-3: #18213456;
+      --line: #22304A;
+      --line-soft: #1A2436;
+
+      --txt: #E9EFFA;
+      --txt-2: #94A3BC;
+      --txt-3: #5F6E88;
+
+      --greedy: #FF9D2E;
+      --greedy-dim: #7A4A11;
+      --smart: #1FD1B2;
+      --smart-dim: #0C5F53;
+      --danger: #FF5470;
+      --warn: #FFC53D;
+      --accent: #5B8CFF;
+
+      --r-sm: 8px;
+      --r-md: 12px;
+      --r-lg: 16px;
+
+      --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+      --sans: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+
+      --rail-l: 340px;
+      --rail-r: 380px;
     }
 
-    * {
-      box-sizing: border-box;
-    }
+    * { box-sizing: border-box; }
 
-    html,
-    body {
-      margin: 0;
+    html, body {
       height: 100%;
-      background: var(--bg);
-      color: var(--text);
-      font-family: "IBM Plex Sans", sans-serif;
+      margin: 0;
+      overflow: hidden;
     }
 
     body {
-      background: radial-gradient(1200px 800px at 18% -12%, #161d2c 0%, var(--bg) 55%);
+      background:
+        radial-gradient(1200px 700px at 15% -10%, #142033 0%, transparent 60%),
+        radial-gradient(900px 600px at 95% 110%, #10202B 0%, transparent 55%),
+        linear-gradient(180deg, var(--bg-grad-a), var(--bg-grad-b));
+      color: var(--txt);
+      font-family: var(--sans);
+      font-size: 13px;
+      -webkit-font-smoothing: antialiased;
     }
 
-    button,
-    input {
-      font-family: inherit;
-    }
+    ::selection { background: var(--accent); color: #fff; }
 
+    /* Scrollbars discretas, del color del panel (Chrome/Edge) */
+    ::-webkit-scrollbar { width: 9px; height: 9px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb {
+      background: #24314A;
+      border-radius: 99px;
+      border: 2px solid transparent;
+      background-clip: content-box;
+    }
+    ::-webkit-scrollbar-thumb:hover { background: #33456A; background-clip: content-box; }
+
+    /* ---------------- estructura general ---------------- */
     .app {
+      height: 100vh;
+      display: grid;
+      grid-template-rows: auto auto auto auto 1fr;
+      gap: 0;
+    }
+
+    /* ---------------- barra superior ---------------- */
+    .topbar {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      padding: 0 18px;
+      height: 58px;
+      background: linear-gradient(180deg, #0E1523, #0B111C);
+      border-bottom: 1px solid var(--line-soft);
+    }
+
+    .brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+
+    .brand-mark {
+      width: 34px; height: 34px;
+      flex: none;
+      border-radius: 10px;
+      display: grid;
+      place-items: center;
+      font-size: 17px;
+      background: linear-gradient(145deg, #1B2942, #121B2C);
+      border: 1px solid #2A3A58;
+      box-shadow: inset 0 1px 0 #ffffff12, 0 4px 14px #0008;
+    }
+
+    .brand h1 {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      line-height: 1.1;
+      white-space: nowrap;
+    }
+
+    .brand p {
+      margin: 2px 0 0;
+      font-size: 11px;
+      color: var(--txt-3);
+      line-height: 1.1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .topbar-spacer { flex: 1 1 auto; }
+
+    /* Reloj de turno: el dato que ancla toda la narrativa del demo */
+    .sim-clock {
       display: flex;
       flex-direction: column;
-      height: 100%;
+      align-items: flex-end;
+      line-height: 1.15;
     }
 
-    header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 16px;
-      padding: 12px 18px;
-      border-bottom: 1px solid var(--stroke);
-      background: var(--bg-2);
-      flex: 0 0 auto;
-      flex-wrap: wrap;
-    }
-
-    header .brand {
-      display: flex;
-      align-items: baseline;
-      gap: 10px;
-    }
-
-    header h1 {
-      margin: 0;
-      font-size: 17px;
-      font-weight: 700;
-      letter-spacing: 0.01em;
-    }
-
-    header p {
-      margin: 2px 0 0;
-      color: var(--muted);
-      font-size: 12px;
-    }
-
-    header .right {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      margin-left: auto;
-    }
-
-    .ghost-btn {
-      border: 1px solid var(--stroke);
-      background: var(--bg-3);
-      color: var(--text);
-      padding: 7px 12px;
-      border-radius: 999px;
-      cursor: pointer;
-      font-size: 11.5px;
+    .sim-clock #simClock {
+      font-family: var(--mono);
+      font-size: 19px;
       font-weight: 600;
-      transition: transform 120ms ease, background 150ms ease, border-color 150ms ease;
+      letter-spacing: 0.02em;
+      font-variant-numeric: tabular-nums;
+      color: var(--txt);
     }
 
-    .ghost-btn:hover {
-      border-color: #3a4658;
-      background: var(--bg-4);
+    .sim-clock span {
+      font-size: 10px;
+      color: var(--txt-3);
+      letter-spacing: 0.02em;
     }
 
-    .ghost-btn:active {
-      transform: scale(0.96);
-    }
-
-    .ghost-btn.active {
-      color: var(--ok);
-      border-color: #2e4a36;
-      background: rgba(88, 214, 141, .1);
+    .topbar-div {
+      width: 1px;
+      height: 26px;
+      background: var(--line-soft);
+      flex: none;
     }
 
     .status-pill {
-      font-family: "IBM Plex Mono", monospace;
-      font-size: 11px;
-      padding: 6px 10px;
-      border: 1px solid var(--stroke);
-      background: var(--bg-3);
-      color: var(--muted);
-      border-radius: var(--radius-sm);
-      display: flex;
-      align-items: center;
+      font-size: 11.5px;
+      font-weight: 600;
+      padding: 6px 12px;
+      border-radius: 99px;
+      white-space: nowrap;
+      background: #16202F;
+      border: 1px solid var(--line);
+      color: var(--txt-2);
+    }
+
+    .status-pill.running {
+      background: #0C3A33;
+      border-color: #17756456;
+      color: var(--smart);
     }
 
     .status-pill.running::before {
       content: "";
       display: inline-block;
-      width: 6px;
-      height: 6px;
-      border-radius: 50%;
-      background: var(--ok);
+      width: 6px; height: 6px;
+      border-radius: 99px;
+      background: var(--smart);
       margin-right: 7px;
-      animation: blink 1.2s ease-in-out infinite;
-    }
-
-    @keyframes blink {
-
-      0%,
-      100% {
-        opacity: 1;
-      }
-
-      50% {
-        opacity: .25;
-      }
-    }
-
-    .status-pill.running {
-      color: var(--ok);
-      border-color: #2e4a36;
-    }
-
-    .status-pill.loading {
-      color: var(--warn);
-      border-color: #4a3f24;
+      vertical-align: middle;
+      animation: pulse-dot 1.4s ease-in-out infinite;
     }
 
     .status-pill.error {
-      color: var(--danger);
-      border-color: #4a2a2a;
+      background: #3A0E19;
+      border-color: #7A2438;
+      color: #FF8BA0;
     }
 
-    .sim-clock {
-      color: var(--text);
-      font: 600 13px "IBM Plex Mono", monospace;
-      text-align: right;
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: .35; transform: scale(.8); }
     }
 
-    .sim-clock span {
-      display: block;
-      margin-top: 3px;
-      color: var(--muted);
-      font-size: 10px;
-      font-weight: 400;
+    .ghost-btn {
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--txt-2);
+      background: #16202F;
+      border: 1px solid var(--line);
+      padding: 7px 13px;
+      border-radius: 99px;
+      cursor: pointer;
+      transition: all .15s ease;
+      white-space: nowrap;
     }
 
+    .ghost-btn:hover { color: var(--txt); border-color: #33456A; background: #1B2739; }
+    .ghost-btn.active { background: #1E2E4F; border-color: var(--accent); color: #C9D9FF; }
+
+    /* ---------------- progreso del turno ---------------- */
     .progress-track {
-      flex: 0 0 auto;
       height: 3px;
-      background: var(--bg-3);
+      background: #0C1220;
+      overflow: hidden;
     }
 
     .progress-fill {
       height: 100%;
       width: 0%;
-      background: linear-gradient(90deg, var(--smart), var(--greedy));
-      transition: width 400ms linear;
+      background: linear-gradient(90deg, var(--accent), var(--smart));
+      box-shadow: 0 0 12px #1FD1B255;
+      transition: width .35s linear;
     }
 
-    .explainer {
-      flex: 0 0 auto;
-      padding: 8px 18px;
-      background: var(--bg-2);
-      border-bottom: 1px solid var(--stroke);
-      font-size: 11.5px;
-      color: var(--muted);
+    /* ---------------- tesis (una línea, no un párrafo) ---------------- */
+    .thesis {
       display: flex;
-      flex-wrap: wrap;
       align-items: center;
-      gap: 6px;
-      line-height: 1.6;
+      gap: 10px;
+      flex-wrap: wrap;
+      padding: 9px 18px;
+      font-size: 11.5px;
+      color: var(--txt-2);
+      background: #0A0F1A;
+      border-bottom: 1px solid var(--line-soft);
     }
 
-    .explainer .chip {
+    .chip {
       display: inline-flex;
       align-items: center;
-      gap: 4px;
-      padding: 2px 9px;
-      border-radius: 999px;
-      font-weight: 700;
+      gap: 6px;
       font-size: 11px;
+      font-weight: 700;
+      padding: 3px 9px 3px 7px;
+      border-radius: 99px;
       white-space: nowrap;
     }
 
-    .explainer .chip.greedy {
-      background: var(--greedy-soft);
-      color: var(--greedy);
+    .chip::before {
+      content: "";
+      width: 7px; height: 7px;
+      border-radius: 99px;
+      background: currentColor;
     }
 
-    .explainer .chip.smart {
-      background: var(--smart-soft);
-      color: var(--smart);
+    .chip.greedy { color: var(--greedy); background: #FF9D2E1A; border: 1px solid #FF9D2E33; }
+    .chip.smart { color: var(--smart); background: #1FD1B21A; border: 1px solid #1FD1B233; }
+
+    .thesis .sep { color: var(--line); }
+    .thesis strong { color: var(--txt); font-weight: 600; }
+
+    /* ---------------- barra de control ---------------- */
+    .controlbar {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-wrap: wrap;
+      padding: 10px 18px;
+      background: linear-gradient(180deg, #101828, #0C121E);
+      border-bottom: 1px solid var(--line-soft);
     }
 
-    .explainer .sep {
-      color: var(--stroke);
-      padding: 0 2px;
+    .cb-group { display: flex; align-items: center; gap: 8px; }
+
+    .cb-label {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      color: var(--txt-3);
+      white-space: nowrap;
     }
 
-    .event-banner {
-      flex: 0 0 auto;
-      max-height: 0;
-      opacity: 0;
-      overflow: hidden;
-      transform: translateY(-6px);
-      transition: max-height 260ms ease, opacity 220ms ease, transform 260ms ease, padding 260ms ease;
+    button.primary {
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 700;
+      color: #04121E;
+      background: linear-gradient(180deg, #35E0C0, #14BFA1);
+      border: none;
+      padding: 9px 20px;
+      border-radius: 9px;
+      cursor: pointer;
+      box-shadow: 0 4px 16px #1FD1B240, inset 0 1px 0 #ffffff45;
+      transition: transform .12s ease, box-shadow .18s ease, filter .18s ease;
+    }
+
+    button.primary:hover:not(:disabled) { filter: brightness(1.07); box-shadow: 0 6px 22px #1FD1B255, inset 0 1px 0 #ffffff45; }
+    button.primary:active:not(:disabled) { transform: translateY(1px); }
+
+    .controlbar button:not(.primary):not(.icon-btn) {
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--txt-2);
+      background: #17212F;
+      border: 1px solid var(--line);
+      padding: 8px 14px;
+      border-radius: 9px;
+      cursor: pointer;
+      transition: all .15s ease;
+    }
+
+    .controlbar button:not(.primary):not(.icon-btn):hover:not(:disabled) {
+      color: var(--txt);
+      border-color: #33456A;
+      background: #1D283A;
+    }
+
+    button:disabled { opacity: .38; cursor: not-allowed; }
+
+    /* Botones de evento sorpresa: el momento estelar del demo, tienen
+       que verse accionables y encontrarse sin buscar. */
+    .events { display: flex; gap: 6px; flex-wrap: wrap; }
+
+    .events button {
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--txt-2);
+      background: #17212F;
+      border: 1px solid var(--line);
+      padding: 7px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all .15s ease;
+      white-space: nowrap;
+    }
+
+    .events button:hover {
+      color: var(--txt);
+      background: #1F2C40;
+      border-color: #3A4E76;
+      transform: translateY(-1px);
+    }
+
+    .events button:active { transform: translateY(0); }
+
+    .cb-sev { display: flex; align-items: center; gap: 8px; }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 96px;
+      height: 4px;
+      border-radius: 99px;
+      background: linear-gradient(90deg, var(--accent), var(--danger));
+      outline: none;
+      cursor: pointer;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 15px; height: 15px;
+      border-radius: 99px;
+      background: #fff;
+      border: 2px solid #0B111C;
+      box-shadow: 0 2px 6px #000A;
+      cursor: pointer;
+    }
+
+    .cb-sev b {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--txt);
+      font-variant-numeric: tabular-nums;
+      min-width: 30px;
+    }
+
+    .cb-env {
+      margin-left: auto;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 2px;
+      text-align: right;
+      min-width: 0;
+    }
+
+    .cb-env p { margin: 0; line-height: 1.3; }
+
+    #envLine {
+      font-size: 11.5px;
+      font-weight: 600;
+      color: var(--txt-2);
+      font-family: var(--mono);
+    }
+
+    #realWeatherLine {
+      font-size: 10px;
+      color: var(--txt-3);
+      max-width: 460px;
+    }
+
+    #sessionLine {
+      font-size: 9.5px;
+      color: #46536B;
+      font-family: var(--mono);
+    }
+
+    /* ---------------- panel de configuración ---------------- */
+    #configPanel {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 9px 18px;
+      background: #0A0F1A;
+      border-bottom: 1px solid var(--line-soft);
+      flex-wrap: wrap;
+    }
+
+    .config-header { display: flex; align-items: center; gap: 8px; }
+
+    .config-header h3 {
+      margin: 0;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      color: var(--txt-3);
+    }
+
+    .icon-btn {
+      width: 22px; height: 22px;
+      display: grid;
+      place-items: center;
+      border-radius: 6px;
+      background: #16202F;
+      border: 1px solid var(--line);
+      color: var(--txt-2);
+      cursor: pointer;
+      font-size: 11px;
+      padding: 0;
+      transition: all .15s ease;
+    }
+
+    .icon-btn:hover { color: var(--txt); border-color: #33456A; }
+
+    .chevron { transition: transform .22s ease; display: block; line-height: 1; }
+    #configPanel.config-collapsed .chevron,
+    .impact.collapsed .chevron { transform: rotate(-90deg); }
+
+    .config-body { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    #configPanel.config-collapsed .config-body { display: none; }
+
+    .field { display: flex; align-items: center; gap: 7px; }
+
+    .field label {
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      color: var(--txt-3);
+      white-space: nowrap;
+    }
+
+    .field input[type="number"] {
+      width: 66px;
+      font-family: var(--mono);
+      font-size: 12px;
+      font-variant-numeric: tabular-nums;
+      color: var(--txt);
+      background: #131C2C;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      padding: 6px 8px;
+      outline: none;
+      transition: border-color .15s ease, box-shadow .15s ease;
+    }
+
+    .field input[type="number"]:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px #5B8CFF22;
+    }
+
+    .field-hint { font-size: 10px; color: var(--txt-3); white-space: nowrap; }
+
+    /* ---------------- escenario principal ---------------- */
+    .stage {
+      display: grid;
+      grid-template-columns: var(--rail-l) minmax(0, 1fr) var(--rail-r);
+      gap: 12px;
+      padding: 12px 18px 16px;
+      min-height: 0;
+    }
+
+    .rail {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      min-height: 0;
+      overflow-y: auto;
+      overflow-x: hidden;
+      padding-right: 2px;
+    }
+
+    .panel {
+      background: linear-gradient(180deg, var(--panel-2), var(--panel));
+      border: 1px solid var(--line-soft);
+      border-radius: var(--r-lg);
+      box-shadow: 0 10px 30px #00000055;
+    }
+
+    .panel-h {
       display: flex;
       align-items: center;
       gap: 8px;
-      font: 600 12px "IBM Plex Mono", monospace;
-      border-bottom: 0 solid transparent;
-      padding: 0 18px;
+      padding: 12px 14px 0;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: .11em;
+      text-transform: uppercase;
+      color: var(--txt-3);
     }
 
-    .event-banner.visible {
-      max-height: 44px;
-      opacity: 1;
-      transform: translateY(0);
-      padding: 10px 18px;
-      border-bottom-width: 1px;
+    .live-dot {
+      width: 6px; height: 6px;
+      border-radius: 99px;
+      background: var(--danger);
+      box-shadow: 0 0 8px var(--danger);
+      animation: pulse-dot 1.4s ease-in-out infinite;
     }
 
-    .event-icon {
+    /* ---------------- marcador (scoreboard) ---------------- */
+    .scoreboard { padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+
+    .race { display: flex; flex-direction: column; gap: 10px; }
+
+    .race-row {
+      position: relative;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      grid-template-areas: "label value" "track track";
+      gap: 6px 10px;
+      padding: 10px 12px;
+      border-radius: var(--r-md);
+      background: #0D1421;
+      border: 1px solid var(--line-soft);
+      transition: border-color .25s ease, box-shadow .25s ease, transform .25s ease;
+    }
+
+    .race-row.greedy.leading { border-color: #FF9D2E55; box-shadow: 0 0 0 1px #FF9D2E22, 0 8px 24px #FF9D2E14; }
+    .race-row.smart.leading { border-color: #1FD1B255; box-shadow: 0 0 0 1px #1FD1B222, 0 8px 24px #1FD1B214; }
+
+    /* Corona discreta para el que va arriba: se entiende de un vistazo
+       desde el fondo de la sala, sin tener que leer los números. */
+    .race-row.leading::after {
+      content: "▲ va arriba";
+      position: absolute;
+      top: -8px; right: 10px;
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      padding: 2px 7px;
+      border-radius: 99px;
+      background: #0D1421;
+      border: 1px solid currentColor;
+    }
+
+    .race-row.greedy.leading::after { color: var(--greedy); }
+    .race-row.smart.leading::after { color: var(--smart); }
+
+    .race-label {
+      grid-area: label;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--txt);
+    }
+
+    .race-label small {
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 500;
+      color: var(--txt-3);
+      padding: 2px 6px;
+      border-radius: 5px;
+      background: #16202F;
+    }
+
+    .race-label .dot {
+      width: 9px; height: 9px;
+      border-radius: 99px;
+      flex: none;
+    }
+
+    .race-row.greedy .dot { background: var(--greedy); box-shadow: 0 0 10px var(--greedy); }
+    .race-row.smart .dot { background: var(--smart); box-shadow: 0 0 10px var(--smart); }
+
+    .race-value {
+      grid-area: value;
+      font-family: var(--mono);
+      font-size: 22px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      font-variant-numeric: tabular-nums;
+      line-height: 1;
+    }
+
+    .race-row.greedy .race-value { color: var(--greedy); }
+    .race-row.smart .race-value { color: var(--smart); }
+
+    .race-track {
+      grid-area: track;
+      height: 6px;
+      border-radius: 99px;
+      background: #060A12;
+      overflow: hidden;
+      border: 1px solid #16202F;
+    }
+
+    .race-fill {
+      height: 100%;
+      width: 0%;
+      border-radius: 99px;
+      transition: width .5s cubic-bezier(.4, 0, .2, 1);
+    }
+
+    .race-row.greedy .race-fill { background: linear-gradient(90deg, #A85A0F, var(--greedy)); box-shadow: 0 0 10px #FF9D2E66; }
+    .race-row.smart .race-fill { background: linear-gradient(90deg, #0E7A69, var(--smart)); box-shadow: 0 0 10px #1FD1B266; }
+
+    /* ---------------- tarjetas de agente ---------------- */
+    .agent-card { padding: 0 0 12px; }
+
+    .agent-card .agent-h {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 9px 13px 8px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .01em;
+    }
+
+    .agent-card.greedy .agent-h { color: var(--greedy); }
+    .agent-card.smart .agent-h { color: var(--smart); }
+
+    .agent-card .agent-h code {
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 500;
+      color: var(--txt-3);
+      background: #0D1421;
+      padding: 2px 6px;
+      border-radius: 5px;
+      border: 1px solid var(--line-soft);
+    }
+
+    /* 2 columnas + una celda "héroe" a todo lo ancho para los puntos:
+       con 3 columnas quedaban 5 KPIs y un hueco vacío en la esquina. */
+    .kpis {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 1px;
+      background: var(--line-soft);
+      border-top: 1px solid var(--line-soft);
+      border-bottom: 1px solid var(--line-soft);
+    }
+
+    .kpi.kpi-hero { grid-column: 1 / -1; padding: 10px 8px; }
+    .kpi.kpi-hero b { font-size: 23px; letter-spacing: -0.03em; }
+    .agent-card.greedy .kpi-hero b { color: var(--greedy); }
+    .agent-card.smart .kpi-hero b { color: var(--smart); }
+
+    .kpi {
+      background: var(--panel);
+      padding: 8px 6px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+      text-align: center;
+      transition: background .4s ease;
+    }
+
+    .kpi b {
+      font-family: var(--mono);
       font-size: 15px;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: -0.01em;
+      color: var(--txt);
+      line-height: 1.1;
     }
 
-    .event-banner.rain {
-      background: linear-gradient(90deg, rgba(79, 141, 253, .18), rgba(79, 141, 253, .04));
-      color: #a9c8ff;
-      border-color: #2c4a7c;
+    .kpi span {
+      font-size: 8.5px;
+      font-weight: 600;
+      letter-spacing: .05em;
+      text-transform: uppercase;
+      color: var(--txt-3);
+      line-height: 1.2;
     }
 
-    .event-banner.flood {
-      background: linear-gradient(90deg, rgba(46, 197, 211, .18), rgba(46, 197, 211, .04));
-      color: #a4e8ee;
-      border-color: #1f5c63;
+    /* Destello al cambiar: hace visible el instante en que un KPI se
+       mueve, que si no se pierde entre dos ticks. */
+    .kpi.flash { animation: kpi-flash 0.7s ease-out; }
+
+    @keyframes kpi-flash {
+      0% { background: #1E3A52; }
+      100% { background: var(--panel); }
     }
 
-    .event-banner.traffic {
-      background: linear-gradient(90deg, rgba(224, 168, 60, .18), rgba(224, 168, 60, .04));
-      color: #f0cf8e;
-      border-color: #5c4a1f;
+    .current {
+      padding: 8px 13px 0;
+      font-size: 11px;
+      color: var(--txt-2);
+      font-family: var(--mono);
+      line-height: 1.4;
     }
 
-    .event-banner.heat {
-      background: linear-gradient(90deg, rgba(224, 98, 60, .2), rgba(224, 98, 60, .04));
-      color: #f0b092;
-      border-color: #5c2f1f;
+    /* ---------------- panel de impacto ---------------- */
+    .impact { overflow: hidden; }
+
+    .impact-toggle {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 11px 13px;
+      background: none;
+      border: none;
+      color: var(--txt);
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      text-align: left;
     }
 
-    .event-banner.clear {
-      background: linear-gradient(90deg, rgba(88, 214, 141, .18), rgba(88, 214, 141, .04));
-      color: #b7ecc9;
-      border-color: #285c3a;
+    .impact-toggle .chevron { color: var(--txt-3); font-size: 10px; }
+
+    .impact-toggle-hint {
+      margin-left: auto;
+      font-size: 10.5px;
+      font-weight: 600;
+      color: var(--smart);
+      text-align: right;
     }
 
+    .impact-body {
+      padding: 0 14px 14px;
+      border-top: 1px solid var(--line-soft);
+      margin-top: 0;
+      padding-top: 12px;
+    }
+
+    .impact.collapsed .impact-body { display: none; }
+
+    .impact-head { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
+
+    .impact-cost { display: flex; flex-direction: column; gap: 4px; }
+
+    .impact-cost label {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      color: var(--txt-3);
+    }
+
+    .impact-cost input {
+      width: 100%;
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--txt);
+      background: #0D1421;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      padding: 6px 9px;
+      outline: none;
+    }
+
+    .impact-cost input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px #5B8CFF22; }
+
+    .impact-cost span { font-size: 9.5px; color: var(--txt-3); line-height: 1.45; }
+    .impact-cost a { color: var(--accent); text-decoration: none; }
+    .impact-cost a:hover { text-decoration: underline; }
+
+    .impact-grid { display: flex; flex-direction: column; }
+
+    .impact-row {
+      display: grid;
+      grid-template-columns: 1fr 62px 62px;
+      gap: 8px;
+      align-items: center;
+      padding: 7px 0;
+      border-bottom: 1px solid var(--line-soft);
+    }
+
+    .impact-row:last-child { border-bottom: none; }
+
+    .impact-row.impact-header { padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+    .impact-row.impact-row-divider { border-top: 1px solid var(--line); margin-top: 4px; padding-top: 10px; }
+
+    .impact-col-label {
+      font-size: 9.5px;
+      font-weight: 700;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      text-align: right;
+    }
+
+    .impact-col-label.greedy { color: var(--greedy); }
+    .impact-col-label.smart { color: var(--smart); }
+
+    .impact-label { font-size: 10.5px; color: var(--txt-2); line-height: 1.35; }
+
+    .impact-val {
+      font-family: var(--mono);
+      font-size: 12px;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+      text-align: right;
+    }
+
+    .impact-val.greedy { color: var(--greedy); }
+    .impact-val.smart { color: var(--smart); }
+
+    .impact-summary {
+      margin-top: 12px;
+      padding: 10px 12px;
+      border-radius: var(--r-sm);
+      background: #0D1421;
+      border: 1px solid var(--line-soft);
+      border-left: 2px solid var(--smart);
+      font-size: 10.5px;
+      line-height: 1.55;
+      color: var(--txt-2);
+    }
+
+    /* ---------------- mapa ---------------- */
+    .map-wrap {
+      position: relative;
+      border-radius: var(--r-lg);
+      overflow: hidden;
+      border: 1px solid var(--line-soft);
+      box-shadow: 0 14px 44px #00000070;
+      min-height: 0;
+    }
+
+    #map { position: absolute; inset: 0; background: #0B1018; }
+
+    /* Las teselas de OSM son claras; se filtran a oscuro para que el
+       mapa deje de competir con los datos que van encima (rutas,
+       pines, zonas de riesgo) y estos se lean de golpe. */
+    .leaflet-tile-pane {
+      filter: invert(1) hue-rotate(185deg) grayscale(.6) brightness(.82) contrast(1.06);
+    }
+
+    .leaflet-container { background: #0B1018; font-family: var(--sans); }
+
+    .leaflet-control-zoom a {
+      background: #131C2C !important;
+      color: var(--txt) !important;
+      border-color: var(--line) !important;
+    }
+
+    .leaflet-control-zoom a:hover { background: #1D283A !important; }
+    .leaflet-control-attribution {
+      background: #0B111Cbb !important;
+      color: var(--txt-3) !important;
+      font-size: 9px !important;
+    }
+    .leaflet-control-attribution a { color: var(--txt-2) !important; }
+
+    .leaflet-tooltip {
+      background: #131C2C !important;
+      border: 1px solid var(--line) !important;
+      color: var(--txt) !important;
+      font-family: var(--mono) !important;
+      font-size: 11px !important;
+      border-radius: 7px !important;
+      box-shadow: 0 6px 20px #000A !important;
+    }
+
+    .leaflet-tooltip::before { display: none !important; }
+
+    /* A la derecha a propósito: arriba-izquierda vive el control de zoom
+       de Leaflet y los dos se encimaban. */
+    .map-hud {
+      position: absolute;
+      top: 12px; right: 12px;
+      z-index: 500;
+      text-align: right;
+      align-items: flex-end;
+      padding: 9px 13px;
+      border-radius: var(--r-md);
+      background: #0B111Cdd;
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 1px solid var(--line);
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      pointer-events: none;
+    }
+
+    .map-hud strong { font-size: 12px; font-weight: 700; letter-spacing: -0.01em; }
+    .map-hud span { font-size: 10px; color: var(--txt-3); }
+
+    .legend {
+      position: absolute;
+      bottom: 12px; left: 12px;
+      z-index: 500;
+      padding: 10px 12px;
+      border-radius: var(--r-md);
+      background: #0B111Cdd;
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 1px solid var(--line);
+      display: grid;
+      grid-template-columns: auto auto;
+      gap: 5px 14px;
+      pointer-events: none;
+    }
+
+    .legend div {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 10px;
+      color: var(--txt-2);
+      white-space: nowrap;
+    }
+
+    .legend span {
+      width: 9px; height: 9px;
+      border-radius: 3px;
+      flex: none;
+    }
+
+    /* Capa de clima sobre el mapa */
     .weather-overlay {
       position: absolute;
       inset: 0;
       z-index: 450;
       pointer-events: none;
       opacity: 0;
-      overflow: hidden;
-      transition: opacity 300ms ease;
+      transition: opacity .8s ease;
     }
 
     .weather-overlay.rain {
-      background: linear-gradient(rgba(33, 64, 92, 0.08), rgba(14, 22, 35, 0.24));
-    }
-
-    .weather-overlay.rain::before,
-    .weather-overlay.rain::after {
-      content: "";
-      position: absolute;
-      inset: -30%;
-      background-image: repeating-linear-gradient(105deg, transparent 0 22px, rgba(196, 225, 255, 0.56) 23px, transparent 25px 44px);
-      background-size: 90px 90px;
-      animation: rain-fall 0.55s linear infinite;
-    }
-
-    .weather-overlay.rain::after {
-      opacity: 0.34;
-      background-size: 150px 150px;
-      animation-duration: 0.9s;
-      animation-direction: reverse;
+      background:
+        repeating-linear-gradient(102deg, #9FD8FF22 0 1px, transparent 1px 5px),
+        linear-gradient(180deg, #0A2A4433, #04121E55);
+      animation: rain-slide .5s linear infinite;
     }
 
     .weather-overlay.flood {
-      background: radial-gradient(circle at 48% 63%, rgba(33, 158, 194, 0.28), transparent 42%);
+      background:
+        repeating-linear-gradient(100deg, #4FB6FF33 0 2px, transparent 2px 6px),
+        linear-gradient(180deg, #06375544, #021C2E77);
+      animation: rain-slide .32s linear infinite;
     }
 
-    .weather-overlay.traffic {
-      background: repeating-linear-gradient(90deg, transparent 0 80px, rgba(239, 166, 63, 0.08) 82px 86px);
+    .weather-overlay.traffic { background: linear-gradient(180deg, #FF6B3522, #4A140033); }
+    .weather-overlay.heat { background: radial-gradient(circle at 50% 40%, #FFB03533, transparent 70%), linear-gradient(180deg, #FF8A0018, #3A1A0022); }
+
+    @keyframes rain-slide {
+      from { background-position: 0 0, 0 0; }
+      to { background-position: -18px 40px, 0 0; }
     }
 
-    .weather-overlay.heat {
-      background: rgba(239, 119, 49, 0.12);
-      animation: heat-shimmer 1.4s ease-in-out infinite alternate;
-    }
-
-    @keyframes rain-fall {
-      from {
-        transform: translate3d(-20px, -40px, 0);
-      }
-
-      to {
-        transform: translate3d(70px, 100px, 0);
-      }
-    }
-
-    @keyframes heat-shimmer {
-      from {
-        filter: saturate(1);
-      }
-
-      to {
-        filter: saturate(1.45) brightness(1.08);
-      }
-    }
-
-    .race {
-      flex: 0 0 auto;
-      padding: 12px 18px 14px;
-      background: var(--bg-2);
-      border-bottom: 1px solid var(--stroke);
-    }
-
-    .race-row {
-      display: grid;
-      grid-template-columns: 160px 1fr 92px;
-      align-items: center;
-      gap: 12px;
-    }
-
-    .race-row+.race-row {
-      margin-top: 8px;
-    }
-
-    .race-label {
-      font-size: 12.5px;
-      font-weight: 700;
-      display: flex;
-      align-items: center;
-      gap: 7px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    .race-label .dot {
-      width: 9px;
-      height: 9px;
-      border-radius: 50%;
-      flex: 0 0 auto;
-    }
-
-    .race-row.greedy .dot {
-      background: var(--greedy);
-    }
-
-    .race-row.smart .dot {
-      background: var(--smart);
-    }
-
-    .race-label small {
-      color: var(--muted);
-      font-weight: 400;
-    }
-
-    .race-track {
-      position: relative;
-      height: 16px;
-      border-radius: 999px;
-      background: var(--bg-3);
-      overflow: hidden;
-      border: 1px solid var(--stroke);
-    }
-
-    .race-fill {
+    /* Banner de evento sobre el mapa */
+    .event-banner {
       position: absolute;
-      inset: 0 auto 0 0;
-      width: 0%;
-      border-radius: 999px;
-      transition: width 500ms cubic-bezier(.22, 1, .36, 1);
-    }
-
-    .race-row.greedy .race-fill {
-      background: linear-gradient(90deg, #b5661f, var(--greedy));
-    }
-
-    .race-row.smart .race-fill {
-      background: linear-gradient(90deg, #1f8a71, var(--smart));
-    }
-
-    .race-value {
-      font-family: "IBM Plex Mono", monospace;
-      font-size: 13px;
-      font-weight: 700;
-      text-align: right;
+      top: 12px;
+      left: 50%;
+      transform: translate(-50%, -22px);
+      z-index: 600;
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      padding: 9px 16px;
+      border-radius: 99px;
+      background: #0B111Cee;
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 1px solid var(--line);
+      font-size: 12px;
+      font-weight: 600;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .3s ease, transform .3s ease;
       white-space: nowrap;
     }
 
-    .race-row.leading .race-value::after {
-      content: " \1F3C6";
-    }
+    .event-banner.visible { opacity: 1; transform: translate(-50%, 0); }
+    .event-banner .event-icon { font-size: 15px; }
+    .event-banner.rain { border-color: #3E8FD0; color: #9FD8FF; box-shadow: 0 0 26px #3E8FD044; }
+    .event-banner.flood { border-color: #2E6FA8; color: #7FC8FF; box-shadow: 0 0 26px #2E6FA855; }
+    .event-banner.traffic { border-color: #C4622E; color: #FFB185; box-shadow: 0 0 26px #C4622E44; }
+    .event-banner.heat { border-color: #C4952E; color: #FFD98A; box-shadow: 0 0 26px #C4952E44; }
+    .event-banner.clear { border-color: var(--line); color: var(--txt-2); }
 
-    .impact {
-      flex: 0 0 auto;
-      padding: 10px 18px;
-      background: var(--bg-2);
-      border-bottom: 1px solid var(--stroke);
-    }
-
-    /* Colapsado por defecto: es el bloque más alto de la página y, abierto
-       todo el tiempo, deja muy poco alto para el mapa. Un clic en el
-       título lo despliega para el momento del pitch de seguridad, y otro
-       clic lo vuelve a guardar. */
-    .impact-toggle {
-      display: flex;
-      align-items: baseline;
-      gap: 6px;
-      width: 100%;
-      background: none;
-      border: none;
-      padding: 2px 0;
-      margin: 0;
-      color: var(--text);
-      font-size: 12.5px;
-      font-weight: 700;
-      font-family: inherit;
-      cursor: pointer;
-      text-align: left;
-    }
-
-    .impact-toggle:hover {
-      color: var(--smart);
-    }
-
-    .impact-toggle .chevron {
-      display: inline-block;
-      transition: transform 200ms ease;
-      color: var(--muted);
-    }
-
-    .impact.collapsed .impact-toggle .chevron {
-      transform: rotate(-90deg);
-    }
-
-    .impact-toggle-hint {
-      font-weight: 400;
-      font-size: 11px;
-      color: var(--muted);
-    }
-
-    .impact-body {
-      overflow: hidden;
-      max-height: 400px;
-      opacity: 1;
-      margin-top: 10px;
-      transition: max-height 280ms ease, opacity 200ms ease, margin-top 280ms ease;
-    }
-
-    .impact.collapsed .impact-body {
-      max-height: 0;
-      opacity: 0;
-      margin-top: 0;
-    }
-
-    .impact-head {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      flex-wrap: wrap;
-      gap: 10px;
-      margin-bottom: 8px;
-    }
-
-    .impact-cost {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      font-size: 10.5px;
-      color: var(--muted);
-    }
-
-    .impact-cost label {
-      margin: 0;
-      text-transform: none;
-      letter-spacing: 0;
-      font-size: 10.5px;
-    }
-
-    .impact-cost input {
-      width: 90px;
-      background: var(--bg);
-      border: 1px solid var(--stroke);
-      color: var(--text);
-      padding: 4px 6px;
-      font-family: "IBM Plex Mono", monospace;
-      font-size: 11px;
-      border-radius: var(--radius-sm);
-    }
-
-    .impact-grid {
+    /* ---------------- feed de decisiones ---------------- */
+    .feed-panel {
       display: flex;
       flex-direction: column;
-      gap: 4px;
-    }
-
-    .impact-row {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) 96px 96px;
-      align-items: center;
-      gap: 8px;
-      padding: 5px 8px;
-      border-radius: var(--radius-sm);
-      background: var(--bg-3);
-    }
-
-    .impact-row.impact-header {
-      background: transparent;
-      padding: 0 8px;
-    }
-
-    /* Separa visualmente las filas de "conteos" (riesgo aceptado, pedidos
-       de alto riesgo…) de las de "tarifa por hora" que vienen después --
-       son dos tipos de métrica distintos, no una continuación de la misma
-       tabla. */
-    .impact-row-divider {
-      margin-top: 6px;
-      border-top: 1px dashed var(--stroke);
-      padding-top: 9px;
-    }
-
-    .impact-col-label {
-      font-size: 10px;
-      text-align: right;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
-    }
-
-    .impact-col-label.greedy {
-      color: var(--greedy);
-    }
-
-    .impact-col-label.smart {
-      color: var(--smart);
-    }
-
-    .impact-label {
-      font-size: 11.5px;
-      color: var(--muted);
-    }
-
-    .impact-val {
-      font-family: "IBM Plex Mono", monospace;
-      font-size: 13px;
-      font-weight: 700;
-      text-align: right;
-    }
-
-    .impact-val.greedy {
-      color: var(--greedy);
-    }
-
-    .impact-val.smart {
-      color: var(--smart);
-    }
-
-    .impact-summary {
-      margin-top: 10px;
-      padding: 8px 10px;
-      background: var(--smart-soft);
-      border: 1px solid #1f5c63;
-      border-radius: var(--radius-sm);
-      font-size: 12px;
-      color: #b7ecc9;
-      line-height: 1.5;
-    }
-
-    .layout {
-      display: grid;
-      grid-template-columns: 280px minmax(0, 1fr) 320px;
       min-height: 0;
       flex: 1 1 auto;
     }
 
-    /* Los parámetros de arranque (semilla, pedidos, turno…) solo importan
-       antes de darle a "Iniciar turno" -- una vez corriendo el turno, solo
-       estorban altura que le vendría bien al feed de eventos. Colapsable
-       igual que el panel de impacto, con su propia preferencia recordada. */
-    .config-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 6px;
-    }
-
-    .config-header h3 {
-      margin: 0;
-    }
-
-    .config-toggle {
-      background: none;
-      border: none;
-      padding: 2px 4px;
-      margin: 0;
-      color: var(--muted);
-      cursor: pointer;
-      line-height: 1;
-    }
-
-    .config-toggle:hover {
-      color: var(--smart);
-    }
-
-    .config-toggle .chevron {
-      display: inline-block;
-      transition: transform 200ms ease;
-    }
-
-    #configPanel.config-collapsed .config-toggle .chevron {
-      transform: rotate(-90deg);
-    }
-
-    .config-body {
-      overflow: hidden;
-      max-height: 320px;
-      opacity: 1;
-      margin-top: 10px;
-      transition: max-height 280ms ease, opacity 200ms ease, margin-top 280ms ease;
-    }
-
-    #configPanel.config-collapsed .config-body {
-      max-height: 0;
-      opacity: 0;
-      margin-top: 0;
-    }
-
-    aside,
-    .feed {
-      position: relative;
-      z-index: 2;
-      border-right: 1px solid var(--stroke);
-      overflow: auto;
-      padding: 14px;
-      background: var(--bg-2);
-    }
-
-    .feed {
-      border-right: 0;
-      border-left: 1px solid var(--stroke);
-    }
-
-    .map-wrap {
-      position: relative;
-      z-index: 0;
-      min-height: 0;
-      min-width: 0;
-      overflow: hidden;
-    }
-
-    #map {
-      height: 100%;
-      min-height: 320px;
-      background: #cfd6de;
-    }
-
-    label {
-      display: block;
-      font-size: 11px;
-      color: var(--muted);
-      margin: 10px 0 4px;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-    }
-
-    input[type="number"],
-    input[type="range"] {
-      width: 100%;
-    }
-
-    input[type="number"] {
-      background: var(--bg);
-      border: 1px solid var(--stroke);
-      color: var(--text);
-      padding: 7px 8px;
-      font-family: "IBM Plex Mono", monospace;
-      font-size: 12px;
-      border-radius: var(--radius-sm);
-    }
-
-    /* Traducción en vivo de un campo a otra unidad más útil para leer de
-       un vistazo (p. ej. horas de turno -> segundos reales que tarda en
-       reproducirse a la velocidad actual), sin ocupar el espacio de otro
-       campo del formulario. */
-    .field-hint {
-      display: block;
-      margin-top: 4px;
-      font-size: 10px;
-      color: var(--muted);
-      font-family: "IBM Plex Mono", monospace;
-    }
-
-    .row-2 {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 8px;
-    }
-
-    .actions {
-      display: flex;
-      gap: 8px;
-      margin-top: 14px;
-    }
-
-    button {
-      border: 1px solid var(--stroke);
-      background: var(--bg-3);
-      color: var(--text);
-      padding: 8px 10px;
-      cursor: pointer;
-      font-size: 12px;
-      font-weight: 500;
-      border-radius: var(--radius-sm);
-      transition: transform 120ms ease, background 150ms ease, border-color 150ms ease;
-    }
-
-    button:hover:not(:disabled) {
-      border-color: #3a4658;
-      background: var(--bg-4);
-    }
-
-    button:active:not(:disabled) {
-      transform: scale(0.96);
-    }
-
-    button.primary {
-      background: linear-gradient(180deg, #2c3c58, #20304a);
-      border-color: #35506c;
-    }
-
-    button.primary:hover:not(:disabled) {
-      background: linear-gradient(180deg, #33445f, #263752);
-    }
-
-    button:disabled {
-      opacity: 0.45;
-      cursor: not-allowed;
-      transform: none;
-    }
-
-    .events {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 6px;
-      margin-top: 8px;
-    }
-
-    .events button {
-      font-size: 11px;
-    }
-
-    .legend {
-      position: absolute;
-      z-index: 500;
-      left: 12px;
-      bottom: 12px;
-      background: rgba(14, 17, 22, 0.88);
-      border: 1px solid var(--stroke);
-      padding: 8px 10px;
-      font-size: 11px;
-      color: var(--muted);
-      border-radius: var(--radius-sm);
-    }
-
-    .legend span {
-      display: inline-block;
-      width: 10px;
-      height: 10px;
-      margin-right: 6px;
-      vertical-align: middle;
-      border-radius: 3px;
-    }
-
-    .agents {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      border-top: 1px solid var(--stroke);
-      flex: 0 0 auto;
-    }
-
-    .agent {
-      padding: 12px 16px;
-      min-height: 168px;
-    }
-
-    .agent.greedy {
-      border-right: 1px solid var(--stroke);
-    }
-
-    .agent h2 {
-      margin: 0 0 8px;
-      font-size: 13px;
-    }
-
-    .agent.greedy h2 {
-      color: var(--greedy);
-    }
-
-    .agent.smart h2 {
-      color: var(--smart);
-    }
-
-    .kpis {
-      display: grid;
-      grid-template-columns: repeat(5, 1fr);
-      gap: 8px;
-    }
-
-    .kpi {
-      background: var(--bg-2);
-      border: 1px solid var(--stroke);
-      padding: 8px;
-      border-radius: var(--radius-sm);
-    }
-
-    .kpi.flash {
-      animation: kpi-flash 550ms ease;
-    }
-
-    @keyframes kpi-flash {
-      0% {
-        background: var(--bg-2);
-      }
-
-      30% {
-        background: var(--bg-4);
-        transform: translateY(-1px);
-      }
-
-      100% {
-        background: var(--bg-2);
-      }
-    }
-
-    .kpi b {
-      display: block;
-      font-family: "IBM Plex Mono", monospace;
-      font-size: 16px;
-      font-weight: 600;
-    }
-
-    .kpi span {
-      font-size: 10px;
-      color: var(--muted);
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-    }
-
-    .current {
-      margin-top: 8px;
-      font-size: 12px;
-      color: var(--muted);
-      min-height: 18px;
-    }
-
     .log {
-      font-family: "IBM Plex Mono", monospace;
-      font-size: 11px;
-      line-height: 1.45;
-      color: var(--muted);
+      flex: 1 1 auto;
+      overflow-y: auto;
+      padding: 10px 14px 14px;
+      font-family: var(--mono);
+      font-size: 10.5px;
+      line-height: 1.55;
+      color: var(--txt-2);
+      min-height: 140px;
     }
 
-    .log>div {
-      animation: log-in 220ms ease;
-      padding: 2px 0;
+    .log > div {
+      padding: 6px 0;
+      border-bottom: 1px solid #141C2B;
+      animation: log-in .25s ease-out;
+      word-break: break-word;
     }
+
+    .log > div:last-child { border-bottom: none; }
 
     @keyframes log-in {
-      from {
-        opacity: 0;
-        transform: translateY(-4px);
-      }
-
-      to {
-        opacity: 1;
-        transform: translateY(0);
-      }
+      from { opacity: 0; transform: translateY(-5px); }
+      to { opacity: 1; transform: translateY(0); }
     }
 
-    .log .accept {
-      color: var(--ok);
-    }
-
-    .log .reject {
-      color: var(--danger);
-    }
-
-    .log .timeout {
-      color: var(--warn);
-    }
+    .log .accept { color: var(--smart); font-weight: 600; }
+    .log .reject { color: var(--danger); font-weight: 600; }
+    .log .timeout { color: var(--warn); font-weight: 600; }
 
     .log .event {
-      color: #f4cf8a;
-      border-left: 2px solid var(--warn);
-      padding-left: 6px;
+      display: inline-block;
+      color: var(--accent);
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 5px;
+      background: #5B8CFF1A;
+      border: 1px solid #5B8CFF33;
     }
+
+    .log .event.real-weather { color: #9FD8FF; background: #3E8FD01A; border-color: #3E8FD033; }
+
+    .log .pickup { color: var(--warn); font-weight: 600; }
+    .log .delivered { font-weight: 600; }
+    .log .delivered.greedy { color: var(--greedy); }
+    .log .delivered.smart { color: var(--smart); }
+    .log .delivered.late { color: var(--danger); }
+    .log .pickup.greedy { color: var(--greedy); }
+    .log .pickup.smart { color: var(--smart); }
+
+    .log .fare { color: var(--txt); font-weight: 600; }
 
     .log .latency {
       display: inline-block;
-      font-size: 10px;
+      font-size: 9px;
       padding: 1px 5px;
-      border-radius: 999px;
-      background: var(--bg-3);
-      border: 1px solid var(--stroke);
-      color: var(--ok);
-      margin: 0 2px;
+      border-radius: 4px;
+      background: #16202F;
+      border: 1px solid var(--line-soft);
+      color: var(--txt-3);
     }
 
-    .log .latency.reject {
-      color: var(--warn);
-      border-color: #5c4a1f;
-    }
+    .log .latency.reject { color: var(--warn); border-color: #6B520F; background: #2A2005; }
+    .log .latency.timeout { color: var(--danger); border-color: #6B1023; background: #2A0510; }
 
-    .log .latency.timeout {
-      color: var(--danger);
-      border-color: #4a2a2a;
-    }
+    /* ---------------- gráfica ---------------- */
+    .chart-panel { flex: none; padding-bottom: 12px; }
+    .chart-panel canvas { width: 100%; height: 130px; display: block; padding: 8px 12px 0; }
 
-    /* Recogida/entrega: su propia línea (no una decisión de aceptar/
-       rechazar), con un borde del color del agente para que salte a la
-       vista dentro del feed sin tener que leer el texto completo. */
-    .log .pickup,
-    .log .delivered {
-      display: block;
-      border-left: 2px solid var(--agent-color, var(--muted));
-      padding-left: 6px;
-      font-weight: 600;
-    }
+    /* ---------------- marcadores del mapa (Leaflet) ---------------- */
+    .driver-icon { background: none !important; border: none !important; }
 
-    .log .pickup.greedy,
-    .log .delivered.greedy {
-      --agent-color: var(--greedy);
-      color: var(--greedy);
-    }
+    .driver-wrap { position: relative; width: 34px; height: 34px; }
 
-    .log .pickup.smart,
-    .log .delivered.smart {
-      --agent-color: var(--smart);
-      color: var(--smart);
-    }
-
-    .log .delivered .fare {
-      color: var(--text);
-      font-weight: 400;
-    }
-
-    /* Entregado fuera de su ventana de tiempo: se aceptó a tiempo, pero
-       para cuando le tocó turno en la cola ya había vencido -- se marca
-       distinto en vez de verse idéntico a una entrega puntual. */
-    .log .delivered.late {
-      --agent-color: var(--warn);
-      color: var(--warn);
-    }
-
-    .order-marker {
+    .driver-marker {
+      position: absolute;
+      inset: 0;
       display: grid;
       place-items: center;
-      width: 28px;
-      height: 28px;
-      border: 2px solid #ffffff;
-      border-radius: 50%;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.55);
-      color: #ffffff;
-      font: 600 10px "IBM Plex Mono", monospace;
-      animation: pop-in 260ms cubic-bezier(.34, 1.56, .64, 1);
+      border-radius: 99px;
+      font-family: var(--mono);
+      font-size: 13px;
+      font-weight: 700;
+      color: #06101B;
+      border: 2px solid #0B111C;
+      transition: transform .3s ease;
     }
 
-    .order-marker.pickup {
-      background: #f0a43c;
+    .driver-marker.greedy { background: var(--greedy); box-shadow: 0 0 0 3px #FF9D2E33, 0 0 22px #FF9D2E88; }
+    .driver-marker.smart { background: var(--smart); box-shadow: 0 0 0 3px #1FD1B233, 0 0 22px #1FD1B288; }
+
+    /* Punta que indica hacia dónde va el repartidor: el JS le rota el
+       transform según el rumbo real del tramo que está recorriendo. */
+    .driver-heading {
+      position: absolute;
+      left: 50%; top: 50%;
+      width: 0; height: 0;
+      border-left: 5px solid transparent;
+      border-right: 5px solid transparent;
+      border-bottom: 9px solid #fff;
+      transform-origin: 50% 130%;
+      transform: translate(-50%, -230%);
+      opacity: .95;
+      filter: drop-shadow(0 0 3px #000A);
     }
 
-    .order-marker.dropoff {
-      background: #7a63d8;
+    .order-pin { background: none !important; border: none !important; }
+
+    .order-marker {
+      width: 22px; height: 22px;
+      display: grid;
+      place-items: center;
+      border-radius: 7px;
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 700;
+      color: #06101B;
+      border: 1.5px solid #0B111C;
+      transition: opacity .5s ease, transform .3s ease, filter .5s ease;
     }
 
-    .order-marker.pending {
-      animation: pop-in 260ms cubic-bezier(.34, 1.56, .64, 1), pulse-order 1.5s ease-in-out 260ms infinite;
+    .order-marker.pickup { background: #F0A43C; box-shadow: 0 0 12px #F0A43C77; }
+    .order-marker.dropoff { background: #9B85FF; box-shadow: 0 0 12px #9B85FF77; }
+
+    .order-marker.pending { animation: pin-pulse 2s ease-in-out infinite; }
+
+    @keyframes pin-pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.16); }
     }
 
-    /* Un pedido ya recogido/entregado deja de "llamar la atención" (sin
-       pulso) y se atenúa, pero conserva un anillo del color del agente que
-       lo tomó -- así de un vistazo se ve qué puntos ya quedaron atrás. */
     .order-marker.collected {
-      animation: none !important;
-      opacity: 0.4;
-      box-shadow: 0 0 0 2px var(--agent-color, #8b97a8) inset, 0 2px 6px rgba(0, 0, 0, 0.5);
+      opacity: .32;
+      filter: grayscale(.7);
+      animation: none;
+      transform: scale(.85);
     }
 
-    /* Ningún agente lo va a recoger (ambos ya lo rechazaron o les hizo
-       timeout): en vez de quedarse pegado pulsando el resto del turno, se
-       encoge y desvanece solo -- despeja el mapa de pedidos ya "muertos". */
     .order-marker.expired {
-      animation: none !important;
       opacity: 0;
-      transform: scale(0.35);
-      transition: opacity 600ms ease, transform 600ms ease;
+      transform: scale(.5);
+      pointer-events: none;
     }
 
-    @keyframes pop-in {
-      from {
-        transform: scale(0);
-        opacity: 0;
-      }
+    .order-ping-wrap { background: none !important; border: none !important; }
 
-      to {
-        transform: scale(1);
-        opacity: 1;
-      }
-    }
-
-    /* Anillo de "recogido/entregado ahora mismo": un pulso expansivo del
-       color del agente que se desvanece solo, sobrepuesto al pin en el
-       instante exacto de la recolección o entrega. */
     .order-ping {
-      width: 16px;
-      height: 16px;
-      border-radius: 50%;
-      border: 3px solid var(--ping-color, #ffffff);
-      animation: ping-burst 750ms ease-out forwards;
+      width: 16px; height: 16px;
+      border-radius: 99px;
+      border: 2px solid var(--ping-color, #fff);
+      animation: ping-out .78s ease-out forwards;
     }
 
-    @keyframes ping-burst {
-      from {
-        transform: scale(0.5);
-        opacity: 0.95;
-      }
-
-      to {
-        transform: scale(3);
-        opacity: 0;
-      }
+    @keyframes ping-out {
+      from { transform: scale(.4); opacity: .95; }
+      to { transform: scale(3.4); opacity: 0; }
     }
 
-    /* Texto de ganancia que sube y se desvanece sobre el punto de entrega,
-       igual que un "+puntos" de videojuego -- refuerza visualmente el
-       momento en que un agente cobra un pedido. */
+    .float-earn-wrap { background: none !important; border: none !important; }
+
     .float-earn {
-      font: 700 12px "IBM Plex Mono", monospace;
-      color: var(--ping-color, #ffffff);
-      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
+      font-family: var(--mono);
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--ping-color, #fff);
+      text-shadow: 0 2px 8px #000C, 0 0 14px currentColor;
       white-space: nowrap;
-      animation: float-up 1150ms ease-out forwards;
+      animation: float-up 1.2s ease-out forwards;
     }
 
     @keyframes float-up {
-      from {
-        transform: translateY(0);
-        opacity: 1;
+      0% { transform: translateY(6px); opacity: 0; }
+      20% { opacity: 1; }
+      100% { transform: translateY(-24px); opacity: 0; }
+    }
+
+    /* ---------------- modo presentación ---------------- */
+    /* Quita todo lo que es andamiaje (configuración, tesis escrita,
+       supuestos del panel de impacto) y agranda lo que se proyecta. */
+    .app.present .thesis,
+    .app.present #configPanel,
+    .app.present .impact-head { display: none; }
+
+    .app.present { --rail-l: 380px; --rail-r: 400px; }
+    .app.present .race-value { font-size: 30px; }
+    .app.present .kpi b { font-size: 19px; }
+    .app.present .kpi span { font-size: 9.5px; }
+    .app.present .log { font-size: 11.5px; }
+    .app.present .brand p { display: none; }
+
+    /* ---------------- adaptable ---------------- */
+    @media (max-width: 1500px) {
+      :root { --rail-l: 310px; --rail-r: 330px; }
+    }
+
+    @media (max-width: 1280px) {
+      .stage {
+        grid-template-columns: 300px minmax(0, 1fr);
+        grid-template-rows: minmax(320px, 1fr) minmax(240px, 44%);
       }
+      .rail-right { grid-column: 1 / -1; }
+      .rail-right { flex-direction: row; overflow: visible; }
+      .feed-panel { flex: 1 1 60%; }
+      .chart-panel { flex: 1 1 40%; }
+    }
 
-      to {
-        transform: translateY(-36px);
-        opacity: 0;
+    @media (max-width: 980px) {
+      html, body { overflow: auto; }
+      .app { height: auto; }
+      .stage {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: none;
       }
-    }
-
-    .driver-wrap {
-      position: relative;
-      width: 34px;
-      height: 34px;
-    }
-
-    /* Indicador de rumbo: una "aguja de brújula" separada del círculo,
-       que orbita alrededor de su centro apuntando hacia donde avanza el
-       repartidor. Vive fuera de `.driver-marker` a propósito -- así rota
-       libremente sin voltear la letra G/R, que se queda siempre legible. */
-    .driver-heading {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      width: 0;
-      height: 0;
-      border-left: 5px solid transparent;
-      border-right: 5px solid transparent;
-      border-bottom: 9px solid #ffffff;
-      transform: translate(-50%, -50%) rotate(var(--bearing, 0deg)) translateY(-24px);
-      transition: transform 150ms linear;
-      filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .6));
-      pointer-events: none;
-    }
-
-    .driver-marker {
-      display: grid;
-      place-items: center;
-      width: 34px;
-      height: 34px;
-      border: 3px solid #ffffff;
-      border-radius: 50%;
-      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.7);
-      color: #ffffff;
-      font: 700 12px "IBM Plex Mono", monospace;
-    }
-
-    .driver-marker.greedy {
-      background: #e08a3c;
-      animation: greedy-pulse 1.4s ease-in-out infinite alternate;
-    }
-
-    .driver-marker.smart {
-      background: #3db8a0;
-      animation: smart-pulse 1.4s ease-in-out infinite alternate;
-    }
-
-    .live-route.greedy-route,
-    .live-route.smart-route {
-      animation: route-flow 1.1s linear infinite;
-      transition: opacity 200ms ease;
-    }
-
-    @keyframes greedy-pulse {
-      from {
-        transform: scale(0.9);
-        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.7);
-      }
-
-      to {
-        transform: scale(1.14);
-        box-shadow: 0 0 0 8px rgba(224, 138, 60, 0.24), 0 2px 12px rgba(0, 0, 0, 0.7);
-      }
-    }
-
-    @keyframes smart-pulse {
-      from {
-        transform: scale(0.9);
-        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.7);
-      }
-
-      to {
-        transform: scale(1.14);
-        box-shadow: 0 0 0 8px rgba(61, 184, 160, 0.24), 0 2px 12px rgba(0, 0, 0, 0.7);
-      }
-    }
-
-    @keyframes route-flow {
-      to {
-        stroke-dashoffset: -28;
-      }
-    }
-
-    .map-hud {
-      position: absolute;
-      z-index: 500;
-      top: 12px;
-      right: 12px;
-      max-width: min(60%, 380px);
-      background: rgba(14, 17, 22, 0.88);
-      border: 1px solid var(--stroke);
-      padding: 8px 10px;
-      font-size: 11px;
-      color: var(--muted);
-      line-height: 1.5;
-      pointer-events: none;
-      border-radius: var(--radius-sm);
-    }
-
-    .map-hud strong {
-      display: block;
-      color: var(--text);
-      font-size: 12px;
-      font-weight: 600;
-    }
-
-    @keyframes pulse-order {
-      50% {
-        transform: scale(1.2);
-        box-shadow: 0 0 0 7px rgba(240, 164, 60, 0.18);
-      }
-    }
-
-    canvas {
-      width: 100%;
-      height: 72px;
-      display: block;
-      margin-top: 10px;
-      background: var(--bg);
-      border: 1px solid var(--stroke);
-      border-radius: var(--radius-sm);
-    }
-
-    h3 {
-      margin: 0 0 8px;
-      font-size: 12px;
-      color: var(--muted);
-      font-weight: 500;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-    }
-
-    /* Modo presentación: oculta configuración y feed, deja solo el mapa,
-       la barra de carrera y el resumen de agentes — pensado para exponer
-       ante un jurado sin ruido visual. */
-    .app.present aside,
-    .app.present .feed {
-      display: none;
-    }
-
-    .app.present .layout {
-      grid-template-columns: 1fr;
-    }
-
-    @media (max-width: 1100px) {
-
-      /* Bajo este ancho dejamos de forzar todo dentro de un viewport fijo
-         con scroll interno por panel: eso aplasta `.layout` (mapa +
-         configuración + feed) contra `.agents`, que siempre reserva su
-         alto natural. En vez de eso, la página entera crece y hace scroll
-         normal, como cualquier sitio responsive. */
-      html,
-      body {
-        height: auto;
-      }
-
-      .app {
-        height: auto;
-        min-height: 100%;
-      }
-
-      .layout {
-        grid-template-columns: 1fr;
-        min-height: 0;
-        overflow: visible;
-      }
-
-      aside,
-      .feed {
-        border: 0;
-        border-bottom: 1px solid var(--stroke);
-        overflow: visible;
-        max-height: none;
-      }
-
-      .map-wrap {
-        height: 60vh;
-        min-height: 320px;
-      }
-
-      .agents {
-        grid-template-columns: 1fr;
-      }
-
-      .agent.greedy {
-        border-right: 0;
-        border-bottom: 1px solid var(--stroke);
-      }
-
-      .race-row {
-        grid-template-columns: 120px 1fr 78px;
-      }
+      .rail { overflow: visible; }
+      .map-wrap { min-height: 460px; }
+      .rail-right { flex-direction: column; }
+      .cb-env { margin-left: 0; align-items: flex-start; text-align: left; }
     }
   </style>
 </head>
 
 <body>
   <div class="app">
-    <header>
+
+    <header class="topbar">
       <div class="brand">
+        <div class="brand-mark">🛵</div>
         <div>
           <h1>The Courier</h1>
           <p>Dos IAs, el mismo turno, la misma calle de Monterrey — una ignora el riesgo, la otra no.</p>
         </div>
       </div>
-      <div class="right">
-        <div class="sim-clock">
-          <div id="simClock">08:00:00</div>
-          <span id="simClockMeta">hora simulada · detenido · velocidad 80x</span>
-        </div>
-        <button id="presentToggle" class="ghost-btn" type="button">🎤 Modo presentación</button>
-        <div id="status" class="status-pill">Listo para simular</div>
+
+      <div class="topbar-spacer"></div>
+
+      <div class="sim-clock">
+        <div id="simClock">08:00:00</div>
+        <span id="simClockMeta">hora simulada · detenido · velocidad 80x</span>
       </div>
+
+      <div class="topbar-div"></div>
+
+      <div id="status" class="status-pill">Listo para simular</div>
+      <button id="presentToggle" class="ghost-btn" type="button">🎤 Presentación</button>
     </header>
+
     <div class="progress-track">
       <div id="shiftProgress" class="progress-fill"></div>
     </div>
-    <div class="explainer">
-      <span class="chip greedy">🟠 Greedy</span> maximiza ganancia bruta e ignora el riesgo por diseño
-      <span class="sep">·</span>
-      <span class="chip smart">🟢 Risk-averse</span> pondera Te + α·Re: puede ganar menos pero evita zonas
-      peligrosas y re-rutea cuando hay un evento activo
-      <span class="sep">·</span>
-      cada decisión se toma bajo un límite duro de <strong>200 ms</strong> (ms real por
-      decisión visible en el feed) o se rechaza automáticamente
-    </div>
-    <div id="eventBanner" class="event-banner">
-      <span id="eventIcon" class="event-icon"></span>
-      <span id="eventText"></span>
+
+    <div class="thesis">
+      <span class="chip greedy">Greedy</span>
+      <span>va por el camino más rápido a secas e ignora el riesgo por diseño</span>
+      <span class="sep">|</span>
+      <span class="chip smart">Risk-averse</span>
+      <span>pondera <strong>Te + α·Re</strong>: recorre el camino más seguro para la misma entrega y cobra más
+        Bonus de Riesgo</span>
+      <span class="sep">|</span>
+      <span>ambos <strong>aceptan el 100%</strong> de los pedidos · cada decisión bajo un límite duro de
+        <strong>200 ms</strong></span>
     </div>
 
-    <div class="race" id="race">
-      <div class="race-row greedy" id="raceGreedy">
-        <div class="race-label"><span class="dot"></span>Greedy <small>(α=0)</small></div>
-        <div class="race-track">
-          <div class="race-fill" id="raceFillGreedy"></div>
-        </div>
-        <div class="race-value" id="raceValueGreedy">$0.00</div>
+    <div class="controlbar">
+      <div class="cb-group">
+        <button id="start" class="primary">▶ Iniciar turno</button>
+        <button id="stop" disabled>Detener</button>
       </div>
-      <div class="race-row smart" id="raceSmart">
-        <div class="race-label"><span class="dot"></span>Risk-averse <small id="raceAlphaLabel">(α=0.35)</small>
-        </div>
-        <div class="race-track">
-          <div class="race-fill" id="raceFillSmart"></div>
-        </div>
-        <div class="race-value" id="raceValueSmart">$0.00</div>
-      </div>
-    </div>
 
-    <div class="impact" id="impact">
-      <button class="impact-toggle" id="impactToggle" type="button" aria-expanded="false">
-        <span class="chevron">▾</span> 🛡️ Impacto de seguridad
-        <span class="impact-toggle-hint" id="impactToggleHint">— corre un turno para verlo</span>
-      </button>
-      <div class="impact-body" id="impactBody">
-        <div class="impact-head">
-          <div class="impact-cost">
-            <label for="incidentCost">Costo promedio por incidente vial</label>
-            <input id="incidentCost" type="number" value="35000" min="0" step="500" />
-            <span>MXN · rango típico $25,000–$50,000 por daños materiales/atención (<a href="https://www.rastreator.mx/seguros-de-auto/articulos-destacados/cuanto-cuesta-un-accidente-vial-en-mexico" target="_blank" rel="noopener">Rastreator/IMCO</a>), ajustable</span>
-          </div>
-          <div class="impact-cost">
-            <label for="accidentRate">Incidencia base sin mitigar</label>
-            <input id="accidentRate" type="number" value="2.5" min="0" step="0.1" />
-            <span>accidentes / 1,000 h de reparto · estimación ilustrativa (no hay tasa oficial pública para repartidores), ajustable</span>
-          </div>
-        </div>
-        <div class="impact-grid">
-          <div class="impact-row impact-header">
-            <span></span>
-            <span class="impact-col-label greedy">Greedy</span>
-            <span class="impact-col-label smart">Risk-averse</span>
-          </div>
-          <div class="impact-row">
-            <span class="impact-label">Riesgo promedio aceptado (Re)</span>
-            <span class="impact-val greedy" id="impactRiskGreedy">—</span>
-            <span class="impact-val smart" id="impactRiskSmart">—</span>
-          </div>
-          <div class="impact-row">
-            <span class="impact-label">Pedidos de alto riesgo aceptados</span>
-            <span class="impact-val greedy" id="impactRiskyGreedy">—</span>
-            <span class="impact-val smart" id="impactRiskySmart">—</span>
-          </div>
-          <div class="impact-row">
-            <span class="impact-label">Rechazos por límite de seguridad</span>
-            <span class="impact-val greedy" id="impactSafetyGreedy">—</span>
-            <span class="impact-val smart" id="impactSafetySmart">—</span>
-          </div>
-          <div class="impact-row impact-row-divider">
-            <span class="impact-label">Ganancia bruta por hora trabajada</span>
-            <span class="impact-val greedy" id="impactEarnHourGreedy">—</span>
-            <span class="impact-val smart" id="impactEarnHourSmart">—</span>
-          </div>
-          <div class="impact-row">
-            <span class="impact-label">Costo esperado por accidentes, por hora</span>
-            <span class="impact-val greedy" id="impactSavingsHourGreedy">—</span>
-            <span class="impact-val smart" id="impactSavingsHourSmart">—</span>
-          </div>
-        </div>
-        <div class="impact-summary" id="impactSummary">Corre un turno para ver el impacto en vivo.</div>
-      </div>
-    </div>
+      <div class="topbar-div"></div>
 
-    <div class="layout">
-      <aside id="configPanel">
-        <div class="config-header">
-          <h3>Configuración</h3>
-          <button class="config-toggle" id="configToggle" type="button" aria-expanded="true"
-            title="Mostrar/ocultar parámetros">
-            <span class="chevron">▾</span>
-          </button>
-        </div>
-        <div class="config-body" id="configBody">
-          <div class="row-2">
-            <div>
-              <label>Semilla</label>
-              <input id="seed" type="number" value="42" />
-            </div>
-            <div>
-              <label>Pedidos</label>
-              <input id="orders" type="number" value="24" min="1" max="500" />
-            </div>
-            <div>
-              <label>Turno (horas)</label>
-              <input id="durationHours" type="number" value="1" min="0.1" step="0.25" />
-              <span class="field-hint" id="durationRealHint">≈ 45 s reales a 80x</span>
-            </div>
-            <div>
-              <label>Tick (s)</label>
-              <input id="tick" type="number" value="30" min="5" />
-            </div>
-            <div>
-              <label>Velocidad <b id="speedLabel">80x</b></label>
-              <input id="speed" type="number" value="80" min="1" step="1" />
-            </div>
-            <div>
-              <label>Alpha</label>
-              <input id="alpha" type="number" value="0.35" min="0" step="0.05" />
-            </div>
-          </div>
-        </div>
-        <div class="actions">
-          <button id="start" class="primary">Iniciar turno</button>
-          <button id="stop" disabled>Detener</button>
-        </div>
-
-        <h3 style="margin-top:22px">Evento sorpresa</h3>
-        <label>Severidad <b id="sevLabel">0.80</b></label>
-        <input id="severity" type="range" min="0" max="1" step="0.05" value="0.8" />
+      <div class="cb-group">
+        <span class="cb-label">Evento sorpresa</span>
         <div class="events">
           <button data-event="HEAVY_RAIN">🌧️ Lluvia</button>
           <button data-event="FLASH_FLOOD">🌊 Inundación</button>
@@ -1468,14 +1312,160 @@
           <button data-event="EXTREME_HEAT">🔥 Calor</button>
           <button data-event="CLEAR">☀️ Despejado</button>
         </div>
-        <p id="envLine" style="margin-top:12px;font-size:12px;color:var(--muted)">Clima: CLEAR</p>
-        <p id="sessionLine"
-          style="margin:8px 0 0;font-size:11px;color:var(--muted);font-family:'IBM Plex Mono',monospace"></p>
+      </div>
+
+      <div class="cb-sev">
+        <span class="cb-label">Severidad</span>
+        <input id="severity" type="range" min="0" max="1" step="0.05" value="0.8" />
+        <b id="sevLabel">0.80</b>
+      </div>
+
+      <div class="cb-env">
+        <p id="envLine">Clima: CLEAR</p>
+        <p id="realWeatherLine"></p>
+        <p id="sessionLine"></p>
+      </div>
+    </div>
+
+    <aside id="configPanel">
+      <div class="config-header">
+        <button class="icon-btn" id="configToggle" type="button" aria-expanded="true"
+          title="Mostrar/ocultar parámetros">
+          <span class="chevron">▾</span>
+        </button>
+        <h3>Configuración</h3>
+      </div>
+      <div class="config-body" id="configBody">
+        <div class="field">
+          <label for="seed">Semilla</label>
+          <input id="seed" type="number" value="42" />
+        </div>
+        <div class="field">
+          <label for="orders">Pedidos</label>
+          <input id="orders" type="number" value="12" min="1" max="500" />
+        </div>
+        <div class="field">
+          <label for="durationHours">Turno (h)</label>
+          <input id="durationHours" type="number" value="1.5" min="0.1" step="0.25" />
+          <span class="field-hint" id="durationRealHint">≈ 68 s reales a 80x</span>
+        </div>
+        <div class="field">
+          <label for="tick">Tick (s)</label>
+          <input id="tick" type="number" value="30" min="5" />
+        </div>
+        <div class="field">
+          <label for="speed">Velocidad <b id="speedLabel">80x</b></label>
+          <input id="speed" type="number" value="80" min="1" step="1" />
+        </div>
+        <div class="field">
+          <label for="alpha">Alpha</label>
+          <input id="alpha" type="number" value="0.35" min="0" step="0.05" />
+        </div>
+      </div>
+    </aside>
+
+    <div class="stage">
+
+      <aside class="rail rail-left">
+
+        <section class="panel scoreboard">
+          <div class="race" id="race">
+            <div class="race-row greedy" id="raceGreedy">
+              <div class="race-label"><span class="dot"></span>Greedy <small>α=0</small></div>
+              <div class="race-value" id="raceValueGreedy">0.0 pts</div>
+              <div class="race-track">
+                <div class="race-fill" id="raceFillGreedy"></div>
+              </div>
+            </div>
+            <div class="race-row smart" id="raceSmart">
+              <div class="race-label"><span class="dot"></span>Risk-averse <small id="raceAlphaLabel">α=0.35</small>
+              </div>
+              <div class="race-value" id="raceValueSmart">0.0 pts</div>
+              <div class="race-track">
+                <div class="race-fill" id="raceFillSmart"></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel agent-card greedy">
+          <div class="agent-h">Agente base <code>greedy_base</code></div>
+          <div class="kpis" id="kpis-greedy"></div>
+          <div class="current" id="cur-greedy">Sin pedido en curso</div>
+        </section>
+
+        <section class="panel agent-card smart">
+          <div class="agent-h">Agente inteligente <code>risk_averse_smart</code></div>
+          <div class="kpis" id="kpis-smart"></div>
+          <div class="current" id="cur-smart">Sin pedido en curso</div>
+        </section>
+
+        <section class="panel impact collapsed" id="impact">
+          <button class="impact-toggle" id="impactToggle" type="button" aria-expanded="false">
+            <span class="chevron">▾</span> 🛡️ Impacto de seguridad
+            <span class="impact-toggle-hint" id="impactToggleHint">— corre un turno para verlo</span>
+          </button>
+          <div class="impact-body" id="impactBody">
+            <div class="impact-head">
+              <div class="impact-cost">
+                <label for="incidentCost">Costo promedio por incidente vial</label>
+                <input id="incidentCost" type="number" value="35000" min="0" step="500" />
+                <span>MXN · rango típico $25,000–$50,000 por daños materiales/atención (<a
+                    href="https://www.rastreator.mx/seguros-de-auto/articulos-destacados/cuanto-cuesta-un-accidente-vial-en-mexico"
+                    target="_blank" rel="noopener">Rastreator/IMCO</a>), ajustable</span>
+              </div>
+              <div class="impact-cost">
+                <label for="accidentRate">Incidencia base sin mitigar</label>
+                <input id="accidentRate" type="number" value="2.5" min="0" step="0.1" />
+                <span>accidentes / 1,000 h de reparto · estimación ilustrativa (no hay tasa oficial pública para
+                  repartidores), ajustable</span>
+              </div>
+            </div>
+            <div class="impact-grid">
+              <div class="impact-row impact-header">
+                <span></span>
+                <span class="impact-col-label greedy">Greedy</span>
+                <span class="impact-col-label smart">Risk-av.</span>
+              </div>
+              <div class="impact-row">
+                <span class="impact-label">Riesgo promedio de la ruta entregada (Re)</span>
+                <span class="impact-val greedy" id="impactRiskGreedy">—</span>
+                <span class="impact-val smart" id="impactRiskSmart">—</span>
+              </div>
+              <div class="impact-row">
+                <span class="impact-label">Pedidos de alto riesgo entregados</span>
+                <span class="impact-val greedy" id="impactRiskyGreedy">—</span>
+                <span class="impact-val smart" id="impactRiskySmart">—</span>
+              </div>
+              <div class="impact-row">
+                <span class="impact-label">Puntos no obtenidos por falta de tiempo</span>
+                <span class="impact-val greedy" id="impactSafetyGreedy">—</span>
+                <span class="impact-val smart" id="impactSafetySmart">—</span>
+              </div>
+              <div class="impact-row impact-row-divider">
+                <span class="impact-label">Puntos totales por hora trabajada</span>
+                <span class="impact-val greedy" id="impactEarnHourGreedy">—</span>
+                <span class="impact-val smart" id="impactEarnHourSmart">—</span>
+              </div>
+              <div class="impact-row">
+                <span class="impact-label">Costo esperado por accidentes, por hora</span>
+                <span class="impact-val greedy" id="impactSavingsHourGreedy">—</span>
+                <span class="impact-val smart" id="impactSavingsHourSmart">—</span>
+              </div>
+            </div>
+            <div class="impact-summary" id="impactSummary">Corre un turno para ver el impacto en vivo.</div>
+          </div>
+        </section>
+
       </aside>
 
       <div class="map-wrap">
         <div id="map"></div>
         <div id="weatherOverlay" class="weather-overlay"></div>
+        <div id="eventBanner" class="event-banner">
+          <span id="eventIcon" class="event-icon"></span>
+          <span id="eventText"></span>
+        </div>
         <div class="map-hud">
           <strong>Centro de Monterrey</strong>
           <span id="mapSummary">Macroplaza · Barrio Antiguo · rutas por calles</span>
@@ -1483,32 +1473,24 @@
         <div class="legend">
           <div><span style="background:var(--greedy)"></span>Greedy</div>
           <div><span style="background:var(--smart)"></span>Risk-averse</div>
-          <div><span style="background:#f0a43c"></span>Pickup</div>
-          <div><span style="background:#7a63d8"></span>Dropoff</div>
-          <div><span style="background:#d45d5d;opacity:.45"></span>Zona inundable</div>
-          <div><span style="background:#c77dff;opacity:.45"></span>Cruce con más accidentes</div>
+          <div><span style="background:#F0A43C"></span>Pickup</div>
+          <div><span style="background:#9B85FF"></span>Dropoff</div>
+          <div><span style="background:#D45D5D;opacity:.55"></span>Zona inundable</div>
+          <div><span style="background:#C77DFF;opacity:.55"></span>Cruce con más accidentes</div>
         </div>
       </div>
 
-      <div class="feed">
-        <h3>Decisiones recientes</h3>
-        <div id="log" class="log">Aún no hay decisiones.</div>
-        <h3 style="margin-top:18px">Ganancia (MXN)</h3>
-        <canvas id="chart" width="600" height="144"></canvas>
-      </div>
-    </div>
+      <aside class="rail rail-right">
+        <section class="panel feed-panel">
+          <div class="panel-h"><span class="live-dot"></span> Decisiones recientes</div>
+          <div id="log" class="log">Aún no hay decisiones.</div>
+        </section>
+        <section class="panel chart-panel">
+          <div class="panel-h">Puntos acumulados</div>
+          <canvas id="chart" width="700" height="260"></canvas>
+        </section>
+      </aside>
 
-    <div class="agents">
-      <section class="agent greedy">
-        <h2>Agente base · greedy_base (α = 0)</h2>
-        <div class="kpis" id="kpis-greedy"></div>
-        <div class="current" id="cur-greedy">Sin pedido en curso</div>
-      </section>
-      <section class="agent smart">
-        <h2>Agente inteligente · risk_averse_smart</h2>
-        <div class="kpis" id="kpis-smart"></div>
-        <div class="current" id="cur-smart">Sin pedido en curso</div>
-      </section>
     </div>
   </div>
 
@@ -1540,11 +1522,12 @@
 
     function emptyAgent() {
       return {
-        earnings: 0, completed: 0, rejected: 0, timeouts: 0, active: 0,
+        pointsBase: 0, pointsRiskBonus: 0, totalPoints: 0, pointsLostTimeout: 0,
+        completed: 0, timeouts: 0, active: 0,
         position: null, current: null, elapsed: 0, duration: 1, events: ["CLEAR"],
         seenDecisions: new Set(), route: [], remainingRoute: [], prevKpi: {},
         lastRouteIndex: null,
-        acceptedRiskSum: 0, acceptedRiskCount: 0, riskyAccepted: 0, safetyRejections: 0,
+        riskSum: 0, riskCount: 0, riskyHandled: 0,
         deliveredLate: 0,
         // Para detectar, comparando contra el tick anterior, el instante
         // exacto en que este agente recoge o entrega un pedido (no solo
@@ -1716,13 +1699,19 @@
 
     function drawZones(zones) {
       state.layers.zones.forEach((z) => map.removeLayer(z));
+      // Relleno muy tenue y contorno punteado: son 34 puntos reales de
+      // inundación que se traslapan entre sí, y con el relleno anterior
+      // el mapa entero quedaba cubierto de burbujas y ya no se veían ni
+      // las rutas ni los repartidores, que es lo que hay que mirar.
       state.layers.zones = zones.map((z) =>
         L.circle([z.lat, z.lon], {
           radius: z.radius_km * 1000,
-          color: "#d45d5d",
+          color: "#FF6B7F",
           weight: 1,
-          fillColor: "#d45d5d",
-          fillOpacity: 0.12,
+          opacity: 0.34,
+          dashArray: "3 4",
+          fillColor: "#FF4E68",
+          fillOpacity: 0.045,
         }).addTo(map).bindTooltip(`🌊 ${z.name} (histórico de inundación, severidad base ${z.base_severity})`)
       );
     }
@@ -1736,10 +1725,11 @@
       state.layers.accidentHotspots = hotspots.map((z) =>
         L.circle([z.lat, z.lon], {
           radius: z.radius_km * 1000,
-          color: "#c77dff",
+          color: "#C77DFF",
           weight: 1,
-          fillColor: "#c77dff",
-          fillOpacity: 0.10,
+          opacity: 0.3,
+          fillColor: "#A855F7",
+          fillOpacity: 0.05,
         }).addTo(map).bindTooltip(`🚧 ${z.name} — ${z.accident_count.toLocaleString("es-MX")} accidentes registrados (2017-2024)`)
       );
     }
@@ -1752,7 +1742,7 @@
         const pickupMarker = L.marker([o.pickup_lat, o.pickup_lon], {
           icon: L.divIcon({ className: "order-pin", html: '<div class="order-marker pickup pending">P</div>', iconSize: [28, 28], iconAnchor: [14, 14] }),
           zIndexOffset: 200,
-        }).addTo(map).bindTooltip("Pickup #" + o.order_id + " · $" + o.base_fare_mxn);
+        }).addTo(map).bindTooltip("Pickup #" + o.order_id + " · " + o.base_points + " pts");
         const dropoffMarker = L.marker([o.dropoff_lat, o.dropoff_lon], {
           icon: L.divIcon({ className: "order-pin", html: '<div class="order-marker dropoff pending">D</div>', iconSize: [28, 28], iconAnchor: [14, 14] }),
           zIndexOffset: 200,
@@ -1903,6 +1893,7 @@
         setStatus("Turno en curso", "running");
         logEl.innerHTML = "";
         updateSimClock(0);
+        applyRealWeather(msg.real_weather);
         if (state.pendingEvent) {
           state.ws.send(JSON.stringify(state.pendingEvent));
           state.pendingEvent = null;
@@ -1915,7 +1906,7 @@
       } else if (msg.type === "session_complete") {
         state.completed = true;
         state.sessionReady = false;
-        setStatus("Turno completo — compara ganancias y rechazos");
+        setStatus("Turno completo — compara puntos y riesgo de ruta");
       } else if (msg.type === "error") {
         setStatus(msg.detail, "error");
       }
@@ -1931,9 +1922,11 @@
       const previousCompleted = agent.completed;
       const previousOrder = agent.current;
       agent.route = msg.current_route || [];
-      agent.earnings = driver.earnings_mxn || 0;
+      agent.pointsBase = driver.points_base || 0;
+      agent.pointsRiskBonus = driver.points_risk_bonus || 0;
+      agent.totalPoints = agent.pointsBase + agent.pointsRiskBonus;
+      agent.pointsLostTimeout = driver.points_lost_timeout || 0;
       agent.completed = driver.orders_completed || 0;
-      agent.rejected = driver.orders_rejected || 0;
       agent.timeouts = driver.timeouts_incurred || 0;
       agent.active = (driver.active_orders || []).length;
       agent.current = msg.current_order_in_progress;
@@ -1957,18 +1950,17 @@
         // si para cuando le tocó turno en la cola ya venció, se marca
         // distinto en vez de verse idéntico a una entrega puntual.
         const isLate = (shift.elapsed_sec || 0) > previousOrder.due_time_sec;
-        appendLog(`<span class="delivered ${key}${isLate ? " late" : ""}">${isLate ? "⏰" : "✅"} ${msg.agent_name} entregó${isLate ? " TARDE" : ""} el pedido #${previousOrder.order_id} <span class="fare">· $${Number(previousOrder.base_fare_mxn).toFixed(2)}</span></span>`);
+        appendLog(`<span class="delivered ${key}${isLate ? " late" : ""}">${isLate ? "⏰" : "✅"} ${msg.agent_name} entregó${isLate ? " TARDE" : ""} el pedido #${previousOrder.order_id} <span class="fare">· ${Number(previousOrder.base_points).toFixed(1)} pts</span></span>`);
         const dropoffMarker = state.orderMarkers[previousOrder.order_id]?.dropoff;
         if (dropoffMarker) {
           const latlng = dropoffMarker.getLatLng();
-          spawnFloatEarn(latlng.lat, latlng.lng, "+$" + Number(previousOrder.base_fare_mxn).toFixed(2), colorVar);
+          spawnFloatEarn(latlng.lat, latlng.lng, "+" + Number(previousOrder.base_points).toFixed(1) + " pts", colorVar);
         }
       }
 
-      agent.acceptedRiskSum = driver.accepted_risk_sum || 0;
-      agent.acceptedRiskCount = driver.accepted_risk_count || 0;
-      agent.riskyAccepted = driver.risky_orders_accepted || 0;
-      agent.safetyRejections = driver.safety_rejections || 0;
+      agent.riskSum = driver.total_risk_sum || 0;
+      agent.riskCount = driver.total_risk_count || 0;
+      agent.riskyHandled = driver.risky_orders_handled || 0;
       agent.deliveredLate = driver.orders_delivered_late || 0;
       agent.elapsed = shift.elapsed_sec || 0;
       agent.duration = shift.shift_duration_sec || 1;
@@ -1990,7 +1982,7 @@
         animateDriverMarker(marker, [msg.driver_position.lat, msg.driver_position.lon], traveledPath);
       }
       agent.remainingRoute = remainingRouteFrom(agent.route, agent.position);
-      state.history[key].push({ t: agent.elapsed, y: agent.earnings });
+      state.history[key].push({ t: agent.elapsed, y: agent.totalPoints });
       if (state.history[key].length > 240) state.history[key].shift();
       document.getElementById("envLine").textContent = "Clima: " + agent.events.join(", ") + " · t=" + formatMin(agent.elapsed);
       updateSimClock(agent.elapsed);
@@ -2242,27 +2234,48 @@
       if (eventType === "CLEAR") window.setTimeout(() => banner.classList.remove("visible"), 2600);
     }
 
+    // Clima REAL de Monterrey en el instante en que arrancó el turno
+    // (Open-Meteo, ver weather_service.py) -- no un evento manual. Se
+    // muestra con su propia etiqueta ("🌐 clima real") para que quede
+    // claro que este dato sí viene de una fuente externa verificable, a
+    // diferencia de los botones de "Evento sorpresa" (esos siguen siendo
+    // manuales, y `showEvent` los sigue manejando igual que siempre).
+    function applyRealWeather(realWeather) {
+      const line = document.getElementById("realWeatherLine");
+      if (!realWeather) {
+        line.textContent = "🌐 Clima real: no se pudo consultar Open-Meteo, turno arrancó despejado.";
+        return;
+      }
+      const { event_type, severity, temperature_c, description, source } = realWeather;
+      line.textContent = `🌐 Clima real al arrancar (${source}): ${description}, ${temperature_c.toFixed(1)}°C` +
+        (event_type !== "CLEAR" ? ` · severidad aplicada ${Number(severity).toFixed(2)}` : "");
+      appendLog(`<span class="event real-weather">🌐 Clima real detectado: ${description} (${temperature_c.toFixed(1)}°C) · fuente: ${source}</span>`);
+      if (event_type !== "CLEAR") {
+        showEvent(event_type, severity);
+      }
+    }
+
     function renderKpis() {
       ["greedy", "smart"].forEach((key) => {
         const a = state.agents[key];
         const values = {
-          earnings: "$" + a.earnings.toFixed(2),
+          points: a.totalPoints.toFixed(1) + " pts",
           completed: String(a.completed),
           late: String(a.deliveredLate),
-          rejected: String(a.rejected),
+          lost: a.pointsLostTimeout.toFixed(1) + " pts",
           timeouts: String(a.timeouts),
         };
         document.getElementById("kpis-" + key).innerHTML = [
-          kpi(values.earnings, "Ganancia", values.earnings !== a.prevKpi.earnings),
-          kpi(values.completed, "Completados", values.completed !== a.prevKpi.completed),
+          kpi(values.points, "Puntos totales", values.points !== a.prevKpi.points, "kpi-hero"),
+          kpi(values.completed, "Entregados", values.completed !== a.prevKpi.completed),
           kpi(values.late, "Tarde", values.late !== a.prevKpi.late),
-          kpi(values.rejected, "Rechazados", values.rejected !== a.prevKpi.rejected),
+          kpi(values.lost, "No cobrados", values.lost !== a.prevKpi.lost),
           kpi(values.timeouts, "Timeouts 200ms", values.timeouts !== a.prevKpi.timeouts),
         ].join("");
         a.prevKpi = values;
         const cur = a.current;
         document.getElementById("cur-" + key).textContent = cur
-          ? `Entregando #${cur.order_id} · $${cur.base_fare_mxn} · ${cur.straight_line_distance_km} km`
+          ? `Entregando #${cur.order_id} · ${cur.base_points} pts · ${cur.straight_line_distance_km} km`
           : (a.active ? `${a.active} pedidos en cola` : "Sin pedido en curso");
       });
       updateRaceBar();
@@ -2270,15 +2283,15 @@
     }
 
     function updateRaceBar() {
-      const g = state.agents.greedy.earnings;
-      const s = state.agents.smart.earnings;
+      const g = state.agents.greedy.totalPoints;
+      const s = state.agents.smart.totalPoints;
       const max = Math.max(g, s, 1);
       const gPct = g > 0 ? Math.max((g / max) * 100, 3) : 0;
       const sPct = s > 0 ? Math.max((s / max) * 100, 3) : 0;
       document.getElementById("raceFillGreedy").style.width = gPct + "%";
       document.getElementById("raceFillSmart").style.width = sPct + "%";
-      document.getElementById("raceValueGreedy").textContent = "$" + g.toFixed(2);
-      document.getElementById("raceValueSmart").textContent = "$" + s.toFixed(2);
+      document.getElementById("raceValueGreedy").textContent = g.toFixed(1) + " pts";
+      document.getElementById("raceValueSmart").textContent = s.toFixed(1) + " pts";
       document.getElementById("raceGreedy").classList.toggle("leading", g > s);
       document.getElementById("raceSmart").classList.toggle("leading", s > g);
     }
@@ -2286,29 +2299,33 @@
     function updateImpactPanel() {
       const g = state.agents.greedy;
       const s = state.agents.smart;
-      const avgRisk = (a) => (a.acceptedRiskCount > 0 ? a.acceptedRiskSum / a.acceptedRiskCount : null);
+      // Con aceptación obligatoria, el riesgo ya no se mide sobre lo
+      // "aceptado" -- se mide sobre la ruta FÍSICA real de cada entrega
+      // (`total_risk_sum`/`total_risk_count` en agent_interface.py).
+      const avgRisk = (a) => (a.riskCount > 0 ? a.riskSum / a.riskCount : null);
       const gRisk = avgRisk(g);
       const sRisk = avgRisk(s);
 
       document.getElementById("impactRiskGreedy").textContent = gRisk === null ? "—" : (gRisk * 100).toFixed(0) + "%";
       document.getElementById("impactRiskSmart").textContent = sRisk === null ? "—" : (sRisk * 100).toFixed(0) + "%";
-      document.getElementById("impactRiskyGreedy").textContent = String(g.riskyAccepted);
-      document.getElementById("impactRiskySmart").textContent = String(s.riskyAccepted);
-      document.getElementById("impactSafetyGreedy").textContent = String(g.safetyRejections);
-      document.getElementById("impactSafetySmart").textContent = String(s.safetyRejections);
+      document.getElementById("impactRiskyGreedy").textContent = String(g.riskyHandled);
+      document.getElementById("impactRiskySmart").textContent = String(s.riskyHandled);
+      // Puntos no obtenidos por falta de tiempo: el costo de oportunidad
+      // que deja la aceptación obligatoria cuando la cola crece más rápido
+      // de lo que un repartidor alcanza a vaciar en el turno.
+      document.getElementById("impactSafetyGreedy").textContent = g.pointsLostTimeout.toFixed(1) + " pts";
+      document.getElementById("impactSafetySmart").textContent = s.pointsLostTimeout.toFixed(1) + " pts";
 
       const summaryEl = document.getElementById("impactSummary");
       const costPerIncident = Number(document.getElementById("incidentCost").value) || 0;
       const accidentRatePer1000h = Number(document.getElementById("accidentRate").value) || 0;
-      const incidentsAvoided = s.safetyRejections;
-      const directSavings = incidentsAvoided * costPerIncident;
 
       const hoursWorked = (agent) => (agent.elapsed > 0 ? agent.elapsed / 3600 : 0);
       const perHour = (amount, hours) => (hours > 0 ? amount / hours : null);
       const gHours = hoursWorked(g);
       const sHours = hoursWorked(s);
-      const gEarnPerHour = perHour(g.earnings, gHours);
-      const sEarnPerHour = perHour(s.earnings, sHours);
+      const gPointsPerHour = perHour(g.totalPoints, gHours);
+      const sPointsPerHour = perHour(s.totalPoints, sHours);
 
       // Costo ESPERADO por accidentes = incidencia base sin mitigar (input
       // ajustable, ver el porqué en el HTML) x costo promedio por
@@ -2317,12 +2334,9 @@
       // `gRisk`/`sRisk`, no un segundo supuesto inventado. Greedy no
       // reduce nada por diseño (alpha=0) y absorbe la incidencia base
       // completa; Risk-averse la reduce en la misma proporción en que
-      // baja su riesgo promedio aceptado. Es un modelo de EXPOSICIÓN
-      // esperada -- esta simulación no genera accidentes reales -- por
-      // eso antes esta fila dependía solo de `safetyRejections` (un
-      // evento raro que casi nunca ocurría en una prueba corta, de ahí
-      // que "no se mostrara nada" útil) y ahora depende de la reducción de
-      // riesgo, que SIEMPRE existe en cuanto hay algo de riesgo medido.
+      // baja el riesgo promedio de la ruta que de verdad recorre. Es un
+      // modelo de EXPOSICIÓN esperada -- esta simulación no genera
+      // accidentes reales.
       const riskReductionFrac = (gRisk !== null && sRisk !== null && gRisk > 0)
         ? Math.max((gRisk - sRisk) / gRisk, 0)
         : null;
@@ -2335,21 +2349,22 @@
         ? gAccidentCostPerHour - sAccidentCostPerHour
         : null;
 
+      const fmtPtsHour = (value) => value === null ? "—" : value.toLocaleString("es-MX", { maximumFractionDigits: 1 }) + " pts/h";
       const fmtMxnHour = (value) => value === null ? "—" : "$" + value.toLocaleString("es-MX", { maximumFractionDigits: 1 }) + "/h";
-      document.getElementById("impactEarnHourGreedy").textContent = fmtMxnHour(gEarnPerHour);
-      document.getElementById("impactEarnHourSmart").textContent = fmtMxnHour(sEarnPerHour);
+      document.getElementById("impactEarnHourGreedy").textContent = fmtPtsHour(gPointsPerHour);
+      document.getElementById("impactEarnHourSmart").textContent = fmtPtsHour(sPointsPerHour);
       document.getElementById("impactSavingsHourGreedy").textContent = fmtMxnHour(gAccidentCostPerHour);
       document.getElementById("impactSavingsHourSmart").textContent = fmtMxnHour(sAccidentCostPerHour);
 
       const parts = [];
       if (riskReductionFrac !== null) {
-        parts.push(`Risk-averse acepta viajes con ${(riskReductionFrac * 100).toFixed(0)}% menos riesgo promedio que Greedy`);
+        parts.push(`Risk-averse recorre rutas con ${(riskReductionFrac * 100).toFixed(0)}% menos riesgo promedio que Greedy, para las mismas entregas`);
       }
-      if (g.riskyAccepted > 0 || incidentsAvoided > 0) {
-        parts.push(`Greedy tomó ${g.riskyAccepted} pedido${g.riskyAccepted === 1 ? "" : "s"} de alto riesgo que Risk-averse rechazó ${incidentsAvoided} vez${incidentsAvoided === 1 ? "" : "es"} por seguridad`);
+      if (g.riskyHandled > 0 || s.riskyHandled > 0) {
+        parts.push(`Greedy entregó ${g.riskyHandled} pedido${g.riskyHandled === 1 ? "" : "s"} por rutas de alto riesgo, contra ${s.riskyHandled} de Risk-averse`);
       }
-      if (incidentsAvoided > 0 && costPerIncident > 0) {
-        parts.push(`ahorro directo por rechazo: $${directSavings.toLocaleString("es-MX", { maximumFractionDigits: 0 })} MXN (a $${costPerIncident.toLocaleString("es-MX")}/incidente)`);
+      if (g.pointsLostTimeout > 0 || s.pointsLostTimeout > 0) {
+        parts.push(`puntos no cobrados por falta de tiempo: ${g.pointsLostTimeout.toFixed(0)} (Greedy) vs ${s.pointsLostTimeout.toFixed(0)} (Risk-averse)`);
       }
       if (preventionSavingsPerHour !== null && preventionSavingsPerHour > 0.01) {
         parts.push(`por cada hora trabajada, reduce ~$${preventionSavingsPerHour.toFixed(1)} MXN el costo esperado por accidentes frente a Greedy (supuestos: $${costPerIncident.toLocaleString("es-MX")}/incidente, ${accidentRatePer1000h}/1,000h de incidencia base)`);
@@ -2364,18 +2379,16 @@
       const hintEl = document.getElementById("impactToggleHint");
       if (gRisk === null && sRisk === null) {
         hintEl.textContent = "— corre un turno para verlo";
-      } else if (incidentsAvoided > 0) {
-        hintEl.textContent = `— ${incidentsAvoided} incidente${incidentsAvoided === 1 ? "" : "s"} evitado${incidentsAvoided === 1 ? "" : "s"}`;
       } else if (gRisk !== null && sRisk !== null && gRisk > 0) {
         const reduction = Math.max(((gRisk - sRisk) / gRisk) * 100, 0);
-        hintEl.textContent = `— ${reduction.toFixed(0)}% menos riesgo aceptado`;
+        hintEl.textContent = `— ${reduction.toFixed(0)}% menos riesgo en ruta`;
       } else {
         hintEl.textContent = "";
       }
     }
 
-    function kpi(value, label, changed) {
-      return `<div class="kpi${changed ? " flash" : ""}"><b>${value}</b><span>${label}</span></div>`;
+    function kpi(value, label, changed, cls) {
+      return `<div class="kpi${cls ? " " + cls : ""}${changed ? " flash" : ""}"><b>${value}</b><span>${label}</span></div>`;
     }
 
     function appendLog(html) {
@@ -2414,31 +2427,111 @@
     function drawChart() {
       const canvas = document.getElementById("chart");
       const ctx = canvas.getContext("2d");
-      const w = canvas.width;
-      const h = canvas.height;
+
+      // El canvas se estira por CSS al ancho del panel, así que su
+      // resolución interna se re-sincroniza con el tamaño real en pantalla
+      // (x devicePixelRatio) antes de dibujar. Sin esto la gráfica se ve
+      // borrosa y deformada en cuanto el panel cambia de ancho.
+      const dpr = window.devicePixelRatio || 1;
+      const cssW = canvas.clientWidth || 320;
+      const cssH = canvas.clientHeight || 130;
+      if (canvas.width !== Math.round(cssW * dpr) || canvas.height !== Math.round(cssH * dpr)) {
+        canvas.width = Math.round(cssW * dpr);
+        canvas.height = Math.round(cssH * dpr);
+      }
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+      const w = cssW;
+      const h = cssH;
+      const padL = 6, padR = 6, padT = 8, padB = 14;
       ctx.clearRect(0, 0, w, h);
+
       const series = [
-        { data: state.history.greedy, color: "#e08a3c" },
-        { data: state.history.smart, color: "#3db8a0" },
+        { data: state.history.greedy, color: "#FF9D2E", fill: "rgba(255,157,46,.13)" },
+        { data: state.history.smart, color: "#1FD1B2", fill: "rgba(31,209,178,.13)" },
       ];
       const all = series.flatMap((s) => s.data);
-      if (!all.length) return;
+
+      // Rejilla base: se dibuja siempre, incluso sin datos, para que el
+      // panel no se vea "vacío/roto" antes de arrancar el turno.
+      ctx.strokeStyle = "#1A2436";
+      ctx.lineWidth = 1;
+      for (let i = 0; i <= 3; i++) {
+        const y = Math.round(padT + ((h - padT - padB) / 3) * i) + 0.5;
+        ctx.beginPath();
+        ctx.moveTo(padL, y);
+        ctx.lineTo(w - padR, y);
+        ctx.stroke();
+      }
+
+      if (!all.length) {
+        ctx.fillStyle = "#5F6E88";
+        ctx.font = "11px 'IBM Plex Mono', monospace";
+        ctx.textAlign = "center";
+        ctx.fillText("esperando el primer tick…", w / 2, h / 2 + 4);
+        return;
+      }
+
       const maxT = Math.max(...all.map((p) => p.t), 1);
       const maxY = Math.max(...all.map((p) => p.y), 1);
+      const px = (t) => padL + (t / maxT) * (w - padL - padR);
+      const py = (v) => h - padB - (v / maxY) * (h - padT - padB);
+
       series.forEach((s) => {
         if (!s.data.length) return;
+
+        // Área bajo la curva: da lectura de "acumulado" de un vistazo
+        // desde lejos, que es como se va a ver esto en la proyección.
+        ctx.beginPath();
+        ctx.moveTo(px(s.data[0].t), h - padB);
+        s.data.forEach((p) => ctx.lineTo(px(p.t), py(p.y)));
+        ctx.lineTo(px(s.data[s.data.length - 1].t), h - padB);
+        ctx.closePath();
+        ctx.fillStyle = s.fill;
+        ctx.fill();
+
         ctx.beginPath();
         ctx.strokeStyle = s.color;
         ctx.lineWidth = 2;
+        ctx.lineJoin = "round";
+        ctx.lineCap = "round";
         s.data.forEach((p, i) => {
-          const x = (p.t / maxT) * (w - 8) + 4;
-          const y = h - 6 - (p.y / maxY) * (h - 14);
-          if (i === 0) ctx.moveTo(x, y);
-          else ctx.lineTo(x, y);
+          const x = px(p.t), y = py(p.y);
+          if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
         });
         ctx.stroke();
+
+        // Punta luminosa en el último valor: marca dónde va cada agente
+        // ahora mismo, no solo por dónde pasó.
+        const last = s.data[s.data.length - 1];
+        ctx.beginPath();
+        ctx.arc(px(last.t), py(last.y), 3, 0, Math.PI * 2);
+        ctx.fillStyle = s.color;
+        ctx.shadowColor = s.color;
+        ctx.shadowBlur = 10;
+        ctx.fill();
+        ctx.shadowBlur = 0;
       });
+
+      ctx.fillStyle = "#5F6E88";
+      ctx.font = "9px 'IBM Plex Mono', monospace";
+      ctx.textAlign = "right";
+      ctx.fillText(maxY.toFixed(0) + " pts", w - padR, padT + 8);
     }
+
+    // Estado inicial: se pintan los KPIs en cero y la rejilla de la
+    // gráfica antes de arrancar, para que la pantalla se vea encendida y
+    // completa desde que carga -- no con dos huecos vacíos esperando el
+    // primer tick (que es justo cuando un juez la ve por primera vez).
+    renderKpis();
+    drawChart();
+
+    // El mapa y la gráfica viven en un grid que cambia de tamaño; Leaflet
+    // y el canvas necesitan que se les avise para no quedar recortados.
+    window.addEventListener("resize", () => {
+      drawChart();
+      if (typeof map !== "undefined" && map) map.invalidateSize();
+    });
   </script>
 </body>
 

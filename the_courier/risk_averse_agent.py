@@ -3,27 +3,25 @@ risk_averse_agent.py  (PASO 3)
 ================================
 Agente Inteligente del reto "The Courier": alpha > 0.
 
-Filosofía de decisión: maximizar RENTABILIDAD NETA, no ganancia bruta.
-Para cada oferta calcula:
+Aceptación OBLIGATORIA (igual que Greedy): `evaluate_offer` ya no rechaza
+nada, ni por rentabilidad ni por el límite duro de riesgo. Lo que sigue
+distinguiendo a este agente es:
 
-    Costo = Te + alpha * Re
-
-donde:
-    Te = tiempo de viaje real (minutos) sobre la malla vial de Monterrey,
-         obtenido siempre vía `CityGraphProvider` (Dijkstra sobre el
-         componente fuertemente conexo real, jamás distancia euclidiana).
-    Re = riesgo dinámico [0, 1] a lo largo de la ruta real, derivado de:
-         - eventos sorpresa activos en el turno (lluvia, inundación,
-           tráfico pesado, calor extremo),
-         - proximidad de los tramos de la ruta a zonas de Monterrey
-           históricamente propensas a inundación (p. ej. cruces del Río
-           Santa Catarina, pasos a desnivel).
-
-Cuando hay múltiples pedidos activos simultáneos, el agente resuelve un
-problema de ruteo con recolección-y-entrega y ventanas de tiempo (PDPTW)
-usando Google OR-Tools, con la matriz de costos ponderada por el mismo
-Te + alpha * Re, de modo que la secuencia elegida también evita zonas de
-riesgo en vez de solo minimizar distancia.
+  1. `risk_weighted_path`: la ruta FÍSICA que de verdad recorre para cada
+     pedido minimiza Te + alpha*Re por arista, no solo Te -- así, para el
+     MISMO pedido que Greedy también entrega, este agente tiende a exponer
+     al repartidor a menos riesgo real (y por lo tanto gana más Bonus de
+     Riesgo, ver risk_model.risk_bonus_points).
+  2. `plan_route`/`_solve_pdptw`: ruteo orientado a PUNTOS, no solo a
+     factibilidad. Con aceptación obligatoria y sin filtro de admisión, la
+     cola de pedidos activos puede crecer más rápido de lo que un solo
+     repartidor alcanza a vaciar en lo que queda del turno; en vez de
+     exigir que el solver sirva a TODOS (y fallar sin solución si no
+     caben), se le permite declinar temporalmente los de menor densidad de
+     valor, maximizando los puntos cobrables dentro de la ventana de
+     tiempo real que resta -- los que quedan fuera se reconsideran en la
+     siguiente replanificación, o terminan en `points_lost_timeout` si el
+     turno se acaba antes de que les toque turno.
 """
 
 from __future__ import annotations
@@ -47,61 +45,37 @@ from city_graph import CityGraphProvider
 from risk_model import SAFETY_HARD_RISK_LIMIT
 from risk_model import candidate_pickup_origins
 from risk_model import point_risk as _shared_point_risk
+from risk_model import risk_bonus_points, RISK_BONUS_MAX_POINTS
 from risk_model import route_risk_and_time as _shared_route_risk_and_time
 from risk_model import weighted_route_risk
 
 logger = logging.getLogger("the_courier.risk_averse_agent")
 
-# Cuántos "minutos equivalentes" de penalización representa un riesgo
-# máximo (Re = 1.0) antes de multiplicarse por alpha. Se usa UNA VEZ por
-# viaje completo en `evaluate_offer`/`_solve_pdptw` (decisión de aceptar y
-# secuenciar pedidos) -- ahí SÍ tiene sentido como cuota fija por viaje,
-# independiente de su duración.
-#
-# Antes en 45.0: con lluvia activa, `point_risk` sube el riesgo AMBIENTAL
-# (no solo cerca de zonas inundables -- en TODA la ciudad) a ~0.33 con
-# severidad 0.8. A alpha=0.35, eso ya son 0.35*0.33*45 ≈ 5.2 min de
-# penalización sobre CUALQUIER viaje, en cualquier parte -- medido en vivo,
-# esto bastaba para tumbar la rentabilidad de casi todos los pedidos por
-# debajo del umbral y el agente rechazaba el 100% (40/40) en cuanto había
-# lluvia, sin aceptar ni uno solo -- lo opuesto a "más cauteloso", más bien
-# "deja de operar por completo". El límite duro de seguridad
-# (SAFETY_HARD_RISK_LIMIT, en risk_model.py) ya se encarga de rechazar sin
-# excepción las rutas genuinamente peligrosas (cerca de una zona
-# inundable); este penalty solo debe desalentar marginalmente los tramos
-# de riesgo ambiental parejo, no anular el negocio entero.
-RISK_PENALTY_MINUTES_AT_MAX_RISK = 20.0
-
 # Cuánto se infla proporcionalmente el tiempo PERCIBIDO de una arista bajo
-# riesgo máximo (Re=1.0) y alpha=1.0, usado SOLO por `risk_weighted_path`
-# para elegir la ruta física real arista por arista -- deliberadamente
-# distinto de RISK_PENALTY_MINUTES_AT_MAX_RISK (que es una cuota fija por
-# VIAJE completo, no por arista): sumar una cuota fija a cada arista sesga
-# a Dijkstra hacia rutas con menos tramos aunque sean más lentas en total,
-# incluso con riesgo uniforme. Ver el comentario en `risk_weighted_path`.
+# riesgo máximo (Re=1.0) y alpha=1.0, usado por `risk_weighted_path` para
+# elegir la ruta física real arista por arista. Proporcional al tiempo real
+# del tramo (no una cuota fija) para no sesgar a Dijkstra hacia rutas con
+# menos tramos aunque sean más lentas -- ver el comentario en
+# `risk_weighted_path` para el detalle completo de por qué.
 RISK_TIME_INFLATION_AT_MAX_RISK = 4.0
-
-# Rentabilidad mínima aceptable en MXN por minuto ajustado por riesgo.
-#
-# A propósito IGUAL al umbral de Greedy (`greedy_agent.MIN_ACCEPTABLE_MXN_PER_MINUTE`
-# = 3.0), no más bajo. Antes era 2.5: con clima despejado, el término de
-# riesgo (alpha * Re_ambiental * RISK_PENALTY_MINUTES_AT_MAX_RISK ≈
-# 0.35*0.05*45 ≈ 0.8 min) es casi nulo, así que ese umbral más bajo NO
-# reflejaba "tolera más riesgo" -- reflejaba "acepta ofertas más flojas en
-# general", sin importar el riesgo. Eso hacía que aceptara más pedidos de
-# los que alcanzaba a entregar en el turno (medido en vivo: 8 aceptados,
-# solo 3 completados, 5 atorados en cola sin cobrar nada), perdiendo
-# contra Greedy por pura sobre-aceptación, no por ser "más seguro". Con el
-# mismo umbral base, la única diferencia real entre los dos agentes vuelve
-# a ser cómo manejan el riesgo -- que es precisamente lo que este proyecto
-# se propone comparar -- no cuál es más permisivo en general.
-MIN_ACCEPTABLE_RISK_ADJUSTED_MXN_PER_MINUTE = 3.0
 
 MIN_TRAVEL_TIME_FLOOR_SEC = 30.0
 
-# Costo operativo monetizado por unidad de riesgo, usado solo para reportar
-# una estimación de "ganancia neta" legible en el panel del simulador.
-OPERATIONAL_RISK_COST_MXN_PER_RISK_UNIT = 18.0
+# Cuántos "minutos equivalentes" de penalización representa un riesgo
+# máximo (Re = 1.0) antes de multiplicarse por alpha -- se usa en la
+# matriz de costos de `prepare_route_matrix` para que la SECUENCIA elegida
+# también evite zonas de riesgo, no solo minimice tiempo.
+RISK_PENALTY_MINUTES_AT_MAX_RISK = 20.0
+
+# Escala (segundos de "costo" por punto de valor) que convierte el valor
+# de un pedido (`base_points` + el Bonus de Riesgo máximo posible) en la
+# penalización que paga el solver de OR-Tools por DECLINARLO temporalmente
+# en `_solve_pdptw`. Calibrado para que declinar un pedido de valor típico
+# salga más caro que la mayoría de los desvíos entre paradas (cientos a
+# ~20 minutos de trayecto real) -- así el solver solo lo declina cuando de
+# verdad no cabe en la ventana de tiempo que resta del turno, no por
+# conveniencia menor.
+POINTS_TO_SECONDS_SCALE = 30.0
 
 
 @dataclass
@@ -118,8 +92,9 @@ class _RouteStop:
 
 class RiskAverseAgent(BaseAgent):
     """
-    Agente Inteligente (alpha > 0): pondera tiempo real de viaje y riesgo
-    dinámico, y resuelve el ruteo multi-pedido con OR-Tools.
+    Agente Inteligente (alpha > 0): aceptación obligatoria, pero rutea
+    Te + alpha*Re tanto en la secuencia (OR-Tools) como en el camino físico
+    (Dijkstra ponderado), maximizando puntos dentro del tiempo del turno.
     """
 
     def __init__(self, graph_provider: CityGraphProvider, alpha: float = 0.35) -> None:
@@ -139,8 +114,8 @@ class RiskAverseAgent(BaseAgent):
 
     # ------------------------------------------------------------------ #
     # Modelo de riesgo dinámico (compartido con `greedy_agent.py` vía
-    # `risk_model.py`, para que el KPI de "riesgo promedio aceptado" sea
-    # una comparación justa entre los dos agentes -- ver ahí el porqué).
+    # `risk_model.py`, para que el KPI de riesgo promedio sea una
+    # comparación justa entre los dos agentes -- ver ahí el porqué).
     # ------------------------------------------------------------------ #
     def _point_risk(self, lat: float, lon: float, shift_state: ShiftState) -> float:
         return _shared_point_risk(lat, lon, shift_state)
@@ -159,14 +134,9 @@ class RiskAverseAgent(BaseAgent):
         `risk_weighted_path` corre Dijkstra con una función de costo en
         Python (no un peso numérico plano), así que NetworkX la invoca en
         cada arista que examina -- potencialmente miles de veces por
-        consulta. Si esa función recalculara `_point_risk` desde cero cada
-        vez (como hacía antes), incluye un for sobre las 5 zonas de
-        inundación con trigonometría (haversine); medido sobre el grafo
-        real: hasta ~700ms por consulta con lluvia intensa activa, sin
-        ningún timeout que lo cubra, lo que se sentía como que el motor
-        "se trababa" de la nada. Precalcular el riesgo de los ~8 mil nodos
-        UNA vez por cambio de clima (no por arista) convierte cada
-        evaluación en un lookup de diccionario."""
+        consulta. Precalcular el riesgo de los ~8 mil nodos UNA vez por
+        cambio de clima (no por arista) convierte cada evaluación en un
+        lookup de diccionario."""
         cache_key = (
             tuple(sorted(event.value for event in shift_state.active_events)),
             round(shift_state.event_severity, 4),
@@ -189,11 +159,12 @@ class RiskAverseAgent(BaseAgent):
         arista, no solo Te. Esta es la ruta que el motor de simulación
         dibuja y recorre de verdad: si hay un evento activo que eleva Re
         cerca de una zona (p. ej. lluvia junto al Río Santa Catarina), la
-        ruta elegida se desvía de esa zona en vez de solo penalizar la
-        oferta en la decisión de aceptar/rechazar. `city_graph.py` la
-        detecta por duck-typing (`getattr(agent, "risk_weighted_path", None)`)
-        para decidir si el Greedy (ciego al riesgo) sigue con la ruta más
-        rápida a secas."""
+        ruta elegida se desvía de esa zona -- y esa menor exposición real
+        es lo que se traduce en más Bonus de Riesgo al completar el
+        pedido, ya que la aceptación en sí es obligatoria para los dos
+        agentes. `city_graph.py` la detecta por duck-typing
+        (`getattr(agent, "risk_weighted_path", None)`) para decidir si el
+        Greedy (ciego al riesgo) sigue con la ruta más rápida a secas."""
         if self.alpha <= 0.0:
             return await self._graph_provider.shortest_path(origin_node, dest_node)
 
@@ -209,23 +180,10 @@ class RiskAverseAgent(BaseAgent):
             if not math.isfinite(travel_time_sec):
                 return float("inf")
             edge_risk = (node_risk.get(u, 0.05) + node_risk.get(v, 0.05)) / 2.0
-            # PROPORCIONAL al tiempo real del tramo, NO una cuota fija por
-            # arista. Sumar una constante fija por arista (como se hacía
-            # antes) sesga a Dijkstra hacia rutas con MENOS tramos aunque
-            # sean más lentas en total -- incluso con riesgo uniforme (sin
-            # ningún evento activo, cada nodo mide exactamente el mismo
-            # 0.05 ambiental), porque cada arista adicional paga la misma
-            # penalización sin importar cuánto dure. Medido en vivo: eso
-            # hacía que Risk-averse manejara rutas reales más lentas que el
-            # camino más rápido incluso en clima despejado -- sin ganar
-            # ninguna seguridad real a cambio (no hay ninguna zona más
-            # riesgosa que evitar si el riesgo es parejo en todos lados) --
-            # y perdía rendimiento frente a Greedy solo por eso. Escalado
-            # por `travel_time_sec`, un riesgo uniforme infla TODAS las
-            # aristas por el mismo factor proporcional (no cambia qué ruta
-            # es más rápida), y solo cuando el riesgo varía de verdad entre
-            # tramos (p. ej. una zona inundable durante lluvia) el desvío
-            # se vuelve realmente más barato que atravesarla.
+            # PROPORCIONAL al tiempo real del tramo, no una cuota fija por
+            # arista -- ver el razonamiento completo en el historial del
+            # módulo: una cuota fija sesga a Dijkstra hacia rutas con menos
+            # tramos aunque sean más lentas, incluso con riesgo uniforme.
             return travel_time_sec * (1.0 + alpha * edge_risk * RISK_TIME_INFLATION_AT_MAX_RISK)
 
         return await self._graph_provider.shortest_path_weighted(
@@ -233,25 +191,25 @@ class RiskAverseAgent(BaseAgent):
         )
 
     # ------------------------------------------------------------------ #
-    # Evaluación de ofertas
+    # Evaluación de ofertas -- ACEPTACIÓN OBLIGATORIA
     # ------------------------------------------------------------------ #
     async def evaluate_offer(
         self, offer: Offer, driver_state: DriverState, shift_state: ShiftState
     ) -> AgentDecision:
         self._last_shift_state = shift_state
 
-        # Las dos piernas (a recoger, y de recoger a entregar) son
-        # independientes entre sí: evaluarlas en paralelo en vez de en fila
-        # es la diferencia entre ~2x y ~1x el costo de un solo Dijkstra
-        # dentro del presupuesto de 200 ms por decisión.
+        # Aceptación obligatoria: no hay umbral de rentabilidad ni de
+        # riesgo que pueda rechazar esta oferta. Todo lo que sigue
+        # calculando (Te, riesgo, score) es informativo -- alimenta el
+        # Bonus de Riesgo estimado, el reasoning del feed y el panel de
+        # KPIs, nunca una decisión de aceptar/rechazar.
         #
-        # La pierna de recogida, además, se evalúa desde varios orígenes
-        # candidatos (posición actual + dropoffs de pedidos ya aceptados) y
-        # se queda con el más barato: si este pickup cae cerca de un
-        # dropoff que el repartidor ya trae en curso, la decisión lo debe
-        # reflejar como "casi gratis llegar" en vez de medirlo siempre
-        # desde la posición física de ESTE instante, que puede estar del
-        # otro lado de la ciudad mientras termina lo que ya trae.
+        # Las dos piernas (a recoger, y de recoger a entregar) se evalúan
+        # en paralelo -- la diferencia entre ~2x y ~1x el costo de un solo
+        # Dijkstra dentro del presupuesto de 200 ms por decisión -- y la
+        # pierna de recogida, además, desde varios orígenes candidatos
+        # (posición actual + dropoffs de pedidos ya en cola), quedándose
+        # con el más barato.
         candidate_origins = candidate_pickup_origins(driver_state, offer)
         pickup_leg_results, (risk_delivery, time_delivery_sec) = await asyncio.gather(
             asyncio.gather(*(
@@ -274,65 +232,34 @@ class RiskAverseAgent(BaseAgent):
         weighted_cost_minutes = te_minutes + self.alpha * weighted_risk * (
             RISK_PENALTY_MINUTES_AT_MAX_RISK
         )
-        risk_adjusted_score = offer.base_fare_mxn / max(weighted_cost_minutes, 0.1)
+        # "Score" informativo (densidad de valor): ya no decide nada, pero
+        # sigue siendo útil para el feed de la demo y como referencia de
+        # qué tan bueno fue este pedido en particular.
+        value_density_score = offer.base_points / max(weighted_cost_minutes, 0.1)
+        estimated_bonus = risk_bonus_points(weighted_risk)
+        exceeds_safety_threshold = weighted_risk >= SAFETY_HARD_RISK_LIMIT
 
-        hard_safety_violation = weighted_risk >= SAFETY_HARD_RISK_LIMIT
-        meets_profitability_bar = (
-            risk_adjusted_score >= MIN_ACCEPTABLE_RISK_ADJUSTED_MXN_PER_MINUTE
+        reasoning = (
+            f"Aceptado (aceptación obligatoria): Te({te_minutes:.1f} min) + "
+            f"alpha({self.alpha:.2f}) * Re({weighted_risk:.2f}) = "
+            f"{weighted_cost_minutes:.1f} min-equiv; densidad de valor "
+            f"{value_density_score:.2f} pts/min-equiv -- bonus de riesgo "
+            f"estimado {estimated_bonus:.1f} pts"
+            + (" (ruta de alto riesgo)." if exceeds_safety_threshold else ".")
         )
-
-        # Factibilidad dura: si ni siquiera arrancando AHORA MISMO (sin
-        # contar ningún otro pedido ya en cola) se llega a tiempo, no hay
-        # rentabilidad que lo justifique -- aceptarlo sería prometer una
-        # entrega que ya sabe que va a incumplir. Antes no existía este
-        # chequeo: se aceptaban ofertas rentables sin importar si la
-        # ventana de tiempo ya era matemáticamente imposible, lo que
-        # producía pedidos entregados hasta 26 minutos tarde sin que el
-        # modelo lo reconociera.
-        projected_completion_sec = driver_state.current_time_sec + total_travel_sec
-        infeasible = projected_completion_sec > offer.due_time_sec
-
-        accepted = meets_profitability_bar and not hard_safety_violation and not infeasible
-
-        net_profit_estimate = offer.base_fare_mxn - (
-            weighted_risk * OPERATIONAL_RISK_COST_MXN_PER_RISK_UNIT
-        )
-
-        if infeasible:
-            reasoning = (
-                f"Rechazado: no llegaría a tiempo -- completaría en el segundo "
-                f"{projected_completion_sec:.0f} pero la ventana vence en el "
-                f"{offer.due_time_sec}, aun arrancando de inmediato."
-            )
-        elif hard_safety_violation:
-            reasoning = (
-                f"Rechazado: riesgo de ruta {weighted_risk:.2f} supera el límite duro de "
-                f"seguridad {SAFETY_HARD_RISK_LIMIT:.2f} (posibles inundaciones en el trayecto), "
-                "sin importar el pago ofrecido."
-            )
-        else:
-            reasoning = (
-                f"Costo ponderado = Te({te_minutes:.1f} min) + alpha({self.alpha:.2f}) * "
-                f"Re({weighted_risk:.2f}) = {weighted_cost_minutes:.1f} min-equiv; "
-                f"rentabilidad {risk_adjusted_score:.2f} MXN/min-equiv "
-                f"({'>=' if meets_profitability_bar else '<'} umbral "
-                f"{MIN_ACCEPTABLE_RISK_ADJUSTED_MXN_PER_MINUTE:.2f})."
-            )
 
         return AgentDecision(
             order_id=offer.order_id,
-            accepted=accepted,
-            score=risk_adjusted_score,
+            score=value_density_score,
             estimated_travel_time_sec=total_travel_sec,
             estimated_risk=weighted_risk,
-            net_profit_estimate_mxn=round(net_profit_estimate, 2),
+            points_bonus_estimate=estimated_bonus,
             reasoning=reasoning,
-            hard_safety_violation=hard_safety_violation,
-            exceeds_safety_threshold=hard_safety_violation,
+            exceeds_safety_threshold=exceeds_safety_threshold,
         )
 
     # ------------------------------------------------------------------ #
-    # Ruteo y batching multi-pedido (OR-Tools, PDPTW)
+    # Ruteo y batching multi-pedido (OR-Tools, PDPTW orientado a puntos)
     # ------------------------------------------------------------------ #
     async def prepare_route_matrix(
         self,
@@ -382,19 +309,13 @@ class RiskAverseAgent(BaseAgent):
         risk_matrix: List[List[float]] = [[0.0] * len(nodes) for _ in range(len(nodes))]
         time_matrix = await self._graph_provider.travel_time_matrix(tuple(nodes))
 
-        # Secuencial A PROPÓSITO, NO `asyncio.gather` -- esto solía
-        # despachar las hasta 42 parejas (3 pedidos activos = 7 nodos) en
-        # paralelo, pero cada una es Dijkstra puro-Python (GIL-bound) sobre
-        # el grafo real: "paralelizar" con gather no las corre de verdad en
-        # paralelo, solo hace que 42 hilos se turnen el mismo núcleo, y el
-        # overhead de cambio de contexto entre tantos hilos terminaba
-        # constando MÁS que resolverlas una por una (medido en vivo: la
-        # versión con gather disparaba seguido el timeout duro de
-        # `ROUTE_PLANNING_TIMEOUT_SEC` -- 3+ segundos reales de "freeze"
-        # visible en el mapa -- mientras que en secuencia cada pareja tarda
-        # ~15-30ms, bien por debajo de ese límite incluso con 42 de ellas).
-        # Mismo diagnóstico y mismo arreglo que ya se aplicó al loop de
-        # evaluación de ofertas en `server.py::_tick`.
+        # Secuencial A PROPÓSITO, NO `asyncio.gather` -- cada pareja es
+        # Dijkstra puro-Python (GIL-bound) sobre el grafo real:
+        # "paralelizar" con gather no las corre de verdad en paralelo, solo
+        # hace que se turnen el mismo núcleo, y el overhead de cambio de
+        # contexto entre tantos hilos termina costando MÁS que resolverlas
+        # una por una (medido en vivo: con gather, timeouts reales de 3+
+        # segundos; en secuencia, ~15-30ms por pareja).
         pairs = [
             (i, j, origin, dest)
             for i, origin in enumerate(nodes)
@@ -423,18 +344,20 @@ class RiskAverseAgent(BaseAgent):
         self._route_cost_matrix = tuple(tuple(row) for row in cost_matrix)
 
     def plan_route(self, driver_state: DriverState, active_orders: List[Offer]) -> List[int]:
-        """Orden en que se atienden los pedidos activos.
+        """Orden en que se atienden los pedidos activos, priorizando
+        maximizar puntos dentro del tiempo real que queda del turno.
 
         Con 0 o 1 pedido no hay nada que decidir. Con 2+ resuelve un
-        pickup-and-delivery con ventanas de tiempo (PDPTW) sobre la matriz
-        de costo Te + alpha*Re calculada por `prepare_route_matrix`, usando
-        Google OR-Tools cuando el problema lo amerita (3+ pedidos activos) y
-        un vecino-más-cercano sobre esa misma matriz para el caso simple de
-        2 pedidos o si OR-Tools no encuentra solución factible (deadlines
-        demasiado ajustados). El motor de simulación solo ejecuta el primer
-        pedido de la secuencia devuelta y vuelve a llamar a este método al
-        completarlo, así que cada replanificación ya puede reaccionar a
-        pedidos nuevos y a eventos de clima inyectados desde la última vez.
+        pickup-and-delivery con ventanas de tiempo (PDPTW) orientado a
+        puntos sobre la matriz de costo Te + alpha*Re calculada por
+        `prepare_route_matrix`, usando Google OR-Tools cuando el problema
+        lo amerita (3+ pedidos activos) y un vecino-más-cercano sobre esa
+        misma matriz para el caso simple de 2 pedidos o si OR-Tools no
+        encuentra ninguna solución. El motor de simulación solo ejecuta el
+        primer pedido de la secuencia devuelta y vuelve a llamar a este
+        método al completarlo -- una secuencia MÁS CORTA que
+        `active_orders` es válida y esperada: los pedidos que no entraron
+        se reconsideran en la siguiente replanificación.
         """
         if not active_orders:
             return []
@@ -443,19 +366,38 @@ class RiskAverseAgent(BaseAgent):
 
         if len(active_orders) >= 3:
             try:
-                return self._solve_pdptw(driver_state, active_orders)
-            except Exception as exc:
-                # Camino esperado y manejado (no un bug): con ventanas de
-                # tiempo ajustadas, sobre todo en turnos cortos de prueba,
-                # OR-Tools puede no encontrar una solución factible. Se
-                # registra en INFO sin traceback -- un ERROR con stack trace
-                # aquí se ve como una caída real en la consola del servidor
-                # durante una demo, cuando en realidad el respaldo de abajo
-                # ya lo resuelve sin interrumpir la sesión.
+                sequence = self._solve_pdptw(driver_state, active_orders)
+                if sequence:
+                    return sequence
+                # Secuencia VACÍA: el solver declinó absolutamente todo, lo
+                # que pasa de forma sistemática en el último tramo del
+                # turno (ya no queda ventana en la que quepa nada). Pero
+                # devolver [] aquí deja al repartidor parado en la calle
+                # con la bolsa llena el resto del turno, sin cobrar nada --
+                # medido en vivo: se congelaba en 4 entregas con 8 pedidos
+                # en cola mientras Greedy seguía repartiendo. Entregar
+                # tarde sigue pagando los puntos base (y el KPI "Tarde" lo
+                # reporta con honestidad), así que siempre es mejor que
+                # quedarse quieto: se cae al vecino más cercano, que nunca
+                # devuelve vacío.
                 logger.info(
-                    "OR-Tools no encontro solucion factible para el PDPTW (%s); "
-                    "usando vecino mas cercano sobre la matriz de costo "
-                    "ponderada por riesgo como respaldo.",
+                    "El ruteo orientado a puntos declino todos los pedidos "
+                    "(sin ventana viable en lo que resta del turno); se sigue "
+                    "repartiendo por vecino mas cercano para no dejar al "
+                    "repartidor detenido."
+                )
+            except Exception as exc:
+                # Camino esperado y manejado (no un bug): en casos límite
+                # OR-Tools puede no encontrar ninguna solución ni siquiera
+                # declinando pedidos. Se registra en INFO sin traceback --
+                # un ERROR con stack trace aquí se ve como una caída real
+                # en la consola del servidor durante una demo, cuando en
+                # realidad el respaldo de abajo ya lo resuelve sin
+                # interrumpir la sesión.
+                logger.info(
+                    "OR-Tools no encontro solucion para el PDPTW orientado a "
+                    "puntos (%s); usando vecino mas cercano sobre la matriz "
+                    "de costo ponderada por riesgo como respaldo.",
                     exc,
                 )
 
@@ -464,9 +406,8 @@ class RiskAverseAgent(BaseAgent):
     def _nearest_neighbor_sequence(self, active_orders: List[Offer]) -> List[int]:
         """Recorre, de forma golosa, el pedido cuyo *pickup* es más barato
         (Te + alpha*Re) desde la posición actual, encadenando desde el
-        *dropoff* del pedido recién elegido. A diferencia del FIFO anterior,
-        esto sí usa el riesgo real de la ruta para decidir cuál pedido
-        conviene atender primero."""
+        *dropoff* del pedido recién elegido. Usa el riesgo real de la ruta
+        para decidir cuál pedido conviene atender primero."""
         order_index = {order.order_id: i for i, order in enumerate(active_orders)}
         remaining = set(order_index)
         sequence: List[int] = []
@@ -499,10 +440,28 @@ class RiskAverseAgent(BaseAgent):
         transit_callback_index = routing.RegisterTransitCallback(transit_callback)
         routing.SetArcCostEvaluatorOfAllVehicles(transit_callback_index)
 
+        # Ventana de tiempo REAL que queda del turno -- ya no un tope
+        # genérico de 24h. Con aceptación obligatoria y sin filtro de
+        # admisión, el ruteo orientado a puntos necesita saber exactamente
+        # cuánto tiempo real le queda para decidir qué de verdad alcanza a
+        # cumplir dentro del turno, no de forma abstracta.
+        shift_state = self._last_shift_state
+        remaining_shift_sec = 24 * 3600
+        if shift_state is not None:
+            remaining_shift_sec = max(
+                0, shift_state.shift_duration_sec - driver_state.current_time_sec
+            )
+
+        # Horizonte del modelo. Nunca puede ser 0 ni menor que la ventana
+        # más lejana que se le vaya a pedir a una parada: un horizonte más
+        # corto que un `SetRange` deja el dominio de esa variable vacío y
+        # OR-Tools trata eso como error del modelo, no como "sin solución".
+        horizon_sec = max(int(remaining_shift_sec), 600)
+
         routing.AddDimension(
             transit_callback_index,
             int(RISK_PENALTY_MINUTES_AT_MAX_RISK * 60.0 * 4),  # holgura (slack)
-            int(24 * 3600),  # tope acumulado por vehículo
+            horizon_sec,
             True,  # el acumulado empieza en 0 en la posición actual
             "Time",
         )
@@ -523,27 +482,56 @@ class RiskAverseAgent(BaseAgent):
                 time_dimension.CumulVar(pickup_idx) <= time_dimension.CumulVar(dropoff_idx)
             )
 
-            # Ventana [ready_time, due_time] relativa al instante actual del
-            # turno, no solo el límite superior: un PDPTW completo respeta
-            # ambos extremos. En la práctica todo pedido en `active_orders`
-            # ya está "listo" para cuando llega aquí (se aceptó porque su
-            # ready_time ya había pasado), así que el límite inferior casi
-            # siempre queda en 0 -- se deja explícito de todos modos por
-            # completitud del modelo.
-            ready_sec = max(0, order.ready_time_sec - base_time_sec)
+            # Ventana de tiempo, siempre saneada a un rango válido dentro
+            # del horizonte: un `SetRange` con mínimo > máximo (pedido ya
+            # vencido, o que abre después de que se acaba el turno) vacía
+            # el dominio de la variable y OR-Tools aborta el proceso a
+            # nivel C++ en vez de devolver "sin solución". Un pedido cuya
+            # ventana ya no cabe simplemente se queda sin holgura y el
+            # solver lo declina vía la disyunción de abajo, que es el
+            # comportamiento correcto y seguro.
+            ready_sec = min(max(0, order.ready_time_sec - base_time_sec), horizon_sec)
             due_sec = max(ready_sec, order.due_time_sec - base_time_sec)
-            time_dimension.CumulVar(pickup_idx).SetRange(ready_sec, due_sec)
-            time_dimension.CumulVar(dropoff_idx).SetRange(ready_sec, due_sec)
+            window_end_sec = min(due_sec, horizon_sec)
+            window_end_sec = max(window_end_sec, ready_sec)
+            time_dimension.CumulVar(pickup_idx).SetRange(ready_sec, window_end_sec)
+            time_dimension.CumulVar(dropoff_idx).SetRange(ready_sec, window_end_sec)
+
+            # Ruteo orientado a puntos: en vez de exigir que el par
+            # pickup+dropoff se visite SIEMPRE (lo que antes hacía que
+            # OR-Tools fallara sin solución si no cabían todos en la
+            # ventana), se le permite al solver "declinarlo" a cambio de
+            # pagar una penalización igual al valor en puntos que costaría
+            # dejarlo fuera. Así prioriza la mayor densidad de valor dentro
+            # del tiempo real que queda, en vez de tronar sin solución --
+            # los pedidos declinados se reconsideran en la siguiente
+            # replanificación, o terminan en `points_lost_timeout` si el
+            # turno se acaba antes de que les toque turno.
+            order_value_points = order.base_points + RISK_BONUS_MAX_POINTS
+            drop_penalty = int(order_value_points * POINTS_TO_SECONDS_SCALE)
+            # El tercer argumento (max_cardinality=2) NO es opcional aquí:
+            # por defecto es 1, que significa "visita como mucho UNO de
+            # estos dos nodos" -- justo lo contrario de lo que se necesita.
+            # Combinado con el AddPickupAndDelivery de arriba (que obliga a
+            # visitar los dos), deja el modelo en contradicción directa, y
+            # OR-Tools no lanza una excepción de Python ante eso: aborta el
+            # proceso entero a nivel C++, tumbando el worker de uvicorn sin
+            # dejar traceback (medido: el turno se congelaba y el servidor
+            # dejaba de responder incluso /health). Con 2 la disyunción
+            # dice lo correcto: "sirve AMBOS nodos, o ninguno y paga la
+            # penalización".
+            routing.AddDisjunction([pickup_idx, dropoff_idx], drop_penalty, 2)
 
         search_parameters = pywrapcp.DefaultRoutingSearchParameters()
         search_parameters.first_solution_strategy = (
             routing_enums_pb2.FirstSolutionStrategy.PATH_CHEAPEST_ARC
         )
-        # Búsqueda local guiada además de la heurística de primera solución:
-        # con instancias tan chicas (tope de MAX_BATCH_ORDERS_FOR_ROUTE_PLANNING
-        # pedidos activos por lote, ver server.py) sobra presupuesto de
-        # tiempo para que mejore la solución inicial en vez de quedarse con
-        # la primera que encuentra -- rutas mejores, no solo factibles.
+        # Búsqueda local guiada además de la heurística de primera
+        # solución: con instancias tan chicas (tope de
+        # MAX_BATCH_ORDERS_FOR_ROUTE_PLANNING pedidos activos por lote, ver
+        # server.py) sobra presupuesto de tiempo para que mejore la
+        # solución inicial en vez de quedarse con la primera que
+        # encuentra -- rutas mejores, no solo factibles.
         search_parameters.local_search_metaheuristic = (
             routing_enums_pb2.LocalSearchMetaheuristic.GUIDED_LOCAL_SEARCH
         )
@@ -551,16 +539,16 @@ class RiskAverseAgent(BaseAgent):
 
         solution = routing.SolveWithParameters(search_parameters)
         if solution is None:
-            raise RuntimeError("OR-Tools no encontro una solucion factible para el PDPTW.")
+            raise RuntimeError(
+                "OR-Tools no encontro ninguna solucion (ni siquiera declinando pedidos)."
+            )
 
-        # OJO: se registra el order_id la PRIMERA vez que aparece en la ruta
-        # (su nodo de RECOGIDA, que siempre precede a su entrega) -- no la
-        # última. El motor de simulación solo consume `sequence[0]` como "el
-        # próximo pedido a recoger y entregar antes de replanificar", así
-        # que el orden correcto es por recogida, no por entrega: si se
-        # armara por entrega, en una ruta que intercala recogidas (p. ej.
-        # recoger A, recoger B, entregar A, entregar B) el motor terminaría
-        # yendo primero al pedido equivocado.
+        # OJO: se registra el order_id la PRIMERA vez que aparece en la
+        # ruta (su nodo de RECOGIDA, que siempre precede a su entrega) --
+        # no la última. El motor de simulación solo consume `sequence[0]`
+        # como "el próximo pedido a recoger y entregar antes de
+        # replanificar", así que el orden correcto es por recogida, no por
+        # entrega.
         node_to_order_id = {1 + 2 * i: order.order_id for i, order in enumerate(active_orders)}
         sequence: List[int] = []
         seen: set[int] = set()
@@ -573,6 +561,10 @@ class RiskAverseAgent(BaseAgent):
                 sequence.append(order_id)
             index = solution.Value(routing.NextVar(index))
 
-        if len(sequence) != len(active_orders):
-            raise RuntimeError("La solucion de OR-Tools no visito todos los pedidos activos.")
+        # A diferencia de antes, una secuencia MÁS CORTA que `active_orders`
+        # ya no es un error -- es la señal de que el ruteo orientado a
+        # puntos decidió, a propósito, declinar algunos pedidos por ahora
+        # (el `AddDisjunction` de arriba) porque no caben con buena
+        # densidad de valor en el tiempo que resta. Quedan en la cola para
+        # la siguiente replanificación.
         return sequence

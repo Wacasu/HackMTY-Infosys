@@ -34,26 +34,53 @@ import osmnx as ox
 
 logger = logging.getLogger("the_courier.city_graph")
 
-MONTERREY_PLACE_NAME = "Monterrey, Nuevo León, México"
 MONTERREY_NETWORK_TYPE = "drive"
 
-# Acotado al centro de Monterrey (en vez de la zona metropolitana completa:
-# Monterrey + San Pedro + Guadalupe + Santa Catarina + Apodaca) para que las
-# pruebas/demos sean rápidas: la descarga de OSMnx y cada Dijkstra son mucho
-# más chicos. Centro = Macroplaza (mismo punto que `DEPOT_LATITUDE/LONGITUDE`
-# en server.py), radio en metros. Para volver a la ciudad completa, cambia
-# `_build_graph_sync` de vuelta a `ox.graph_from_place(MONTERREY_PLACE_NAME, ...)`.
-#
-# 4000m dejaba solo 1 de las 5 zonas de inundación de `risk_model.py`
-# (Morones Prieto, a 2.4km del depósito) dentro del grafo cargado; las
-# demás quedaban fuera y nunca influían en ninguna ruta real. A 6000m
-# entran también Puente del Papa (~4.6km) y Distribuidor Gonzalitos
-# (~4.3km) con margen, dando 3 de 5 zonas -- muchas más oportunidades
-# reales de que una ruta cruce una zona de riesgo y dispare un rechazo
-# por seguridad, que es justo el KPI que se quiere mostrar en la demo.
+# Centro = Macroplaza (mismo punto que `DEPOT_LATITUDE/LONGITUDE` en
+# server.py), radio en metros. Acotado al centro de Monterrey (en vez de
+# la ZMM completa) para que la descarga de OSMnx y cada Dijkstra sean
+# rápidos -- ver `ZMM_PLACE_NAMES` más abajo sobre por qué NO está activa
+# la cobertura completa todavía.
 CENTRO_MONTERREY_LATITUDE = 25.6714
 CENTRO_MONTERREY_LONGITUDE = -100.3092
 CENTRO_MONTERREY_RADIUS_M = 6000.0
+
+# --------------------------------------------------------------------- #
+# Cobertura de ZMM completa (Apodaca/Escobedo/Santa Catarina/Ciénega de
+# Flores) -- PREPARADA PERO INACTIVA.
+# --------------------------------------------------------------------- #
+# Se implementó para dar soporte a los 9 CEDIS/parques logísticos reales
+# fijados como pickup en `order_generator.py` (`FIXED_PICKUP_LOCATIONS`),
+# pero quedó bloqueada: este entorno no logra abrir NINGUNA conexión
+# nueva de Python hacia overpass-api.de (falla incluso una consulta
+# mínima de 300m con el mismo `ConnectTimeoutError` a los 180s, así que
+# no es un problema de tamaño de área) -- confirmado con varios intentos
+# reales. Los grafos que sí cargan en esta sesión lo hacen desde caché
+# local ya en disco de descargas previas, no de una conexión nueva.
+#
+# Para activar esto en cuanto se resuelva el acceso a Overpass (otra red,
+# un proxy, o un archivo OSM descargado por otra vía y cargado con
+# `ox.graph_from_xml`): cambiar `_build_graph_sync` para que reciba
+# `place_names: Tuple[str, ...] = ZMM_PLACE_NAMES` en vez de
+# `center_lat/center_lon/radius_m`, y su cuerpo para que llame
+# `ox.graph_from_place(list(place_names), network_type=MONTERREY_NETWORK_TYPE)`
+# en vez de `ox.graph_from_point(...)`. `order_generator.py` ya no necesita
+# ningún cambio adicional: su lógica de pickup fijo por CEDIS y radio de
+# entrega seguro ya está escrita y lista, sólo inactiva por el mismo motivo
+# (ver `FIXED_PICKUPS_ENABLED` ahí).
+ZMM_PLACE_NAMES: Tuple[str, ...] = (
+    "Monterrey, Nuevo León, México",
+    "San Pedro Garza García, Nuevo León, México",
+    "San Nicolás de los Garza, Nuevo León, México",
+    "Guadalupe, Nuevo León, México",
+    "Apodaca, Nuevo León, México",
+    "General Escobedo, Nuevo León, México",
+    "Santa Catarina, Nuevo León, México",
+    "Juárez, Nuevo León, México",
+    "García, Nuevo León, México",
+    "Ciénega de Flores, Nuevo León, México",
+    "Salinas Victoria, Nuevo León, México",
+)
 
 # Velocidad de respaldo (km/h) para aristas sin atributo `speed_kph` estimado
 # por OSMnx a partir de las etiquetas `maxspeed` de OpenStreetMap.
@@ -115,7 +142,8 @@ class CityGraphProvider:
         """Descarga el grafo vial del centro de Monterrey (un radio alrededor
         del depósito) y lo reduce al componente fuertemente conexo más
         grande. Función síncrona por diseño: solo debe ejecutarse dentro de
-        `asyncio.to_thread`."""
+        `asyncio.to_thread`. Ver `ZMM_PLACE_NAMES` arriba para la versión de
+        cobertura completa (preparada, inactiva por un bloqueo de red)."""
         raw_graph = ox.graph_from_point(
             (center_lat, center_lon), dist=radius_m, network_type=MONTERREY_NETWORK_TYPE)
         raw_graph = ox.add_edge_speeds(

@@ -2,15 +2,18 @@
 risk_model.py
 =============
 Modelo de riesgo dinámico compartido, extraído de `risk_averse_agent.py`
-para que **ambos** agentes puedan medir el riesgo de una ruta con la misma
-vara -- el Agente Inteligente lo usa para decidir (Costo = Te + alpha*Re);
-el Agente Base lo usa ÚNICAMENTE para reportar en el panel de KPIs qué tan
-riesgosos fueron los viajes que aceptó, sin que afecte su lógica de
-aceptación (que sigue ignorando el riesgo por diseño, alpha=0).
+para que **ambos** agentes midan el riesgo de una ruta con la misma vara.
 
-Esta separación es lo que permite justificar el modelo con datos reales:
-sin ella, no hay forma de saber "qué tanto riesgo aceptó el Greedy" porque
-el Greedy nunca lo calculaba.
+Con aceptación obligatoria para los dos agentes (ninguno puede rechazar
+una oferta), este módulo ya NO decide nada -- solo MIDE. Lo que sigue
+diferenciando a Risk-Averse de Greedy es:
+  1. `risk_bonus_points`: cuántos puntos extra gana cada entrega según qué
+     tan bajo fue el riesgo de la ruta REAL recorrida (Risk-Averse, al
+     elegir caminos Te+alpha*Re, tiende a ganar más de esto que Greedy,
+     que siempre va por el camino más rápido a secas).
+  2. `SAFETY_HARD_RISK_LIMIT`: ya no rechaza nada -- solo clasifica, para
+     reporte, qué entregas tuvieron una exposición objetivamente alta
+     (`risky_orders_handled` en agent_interface.py).
 """
 
 from __future__ import annotations
@@ -40,14 +43,31 @@ MAX_PICKUP_ORIGIN_CANDIDATES = 3
 # contrario al buscado: menos pedidos aceptados, no más).
 PICKUP_PROXIMITY_KM = 2.5
 
-# Umbral duro de seguridad, compartido: un tramo con riesgo por encima de
-# este valor se considera "de alto riesgo" sin importar cuánto pague.
-# `RiskAverseAgent` lo usa para RECHAZAR de verdad; `GreedyAgent` solo lo
-# usa para REPORTAR (nunca decide con esto -- sigue ciego al riesgo por
-# diseño). Esa comparación ("Greedy aceptó N pedidos que superan este
-# umbral; Risk-averse rechazó M de ellos") es el KPI central para
-# justificar el modelo: cuántos incidentes potenciales evita de verdad.
+# Umbral de "alto riesgo", compartido: un tramo con riesgo por encima de
+# este valor se clasifica como riesgoso para REPORTE (`risky_orders_handled`
+# en agent_interface.py) -- con aceptación obligatoria, ya no rechaza nada
+# para ningún agente. Sigue siendo el mismo número para los dos, así la
+# comparación ("cuántas entregas de Greedy vs. de Risk-Averse cruzaron este
+# umbral") es una vara justa.
 SAFETY_HARD_RISK_LIMIT = 0.75
+
+# Bonus de Riesgo máximo (puntos) que otorga UNA entrega cuando su ruta
+# real midió riesgo cero; se prorratea linealmente hasta 0 puntos a riesgo
+# máximo (1.0). Es la pieza central del esquema de recompensas cerrado:
+# con aceptación obligatoria para los dos agentes, esto -- no un rechazo --
+# es lo único que puede premiar a Risk-Averse por elegir un camino más
+# seguro para la MISMA entrega que Greedy también va a completar.
+RISK_BONUS_MAX_POINTS = 20.0
+
+
+def risk_bonus_points(weighted_risk: float) -> float:
+    """Bonus de Riesgo (puntos) de una entrega dado el riesgo medido de la
+    ruta real que se recorrió para cumplirla. Lineal y determinista -- sin
+    esto, dos agentes que completan el mismo pedido por caminos distintos
+    cobrarían lo mismo, y la elección de ruta más segura no tendría ningún
+    reflejo en el marcador."""
+    clamped_risk = max(0.0, min(weighted_risk, 1.0))
+    return round(RISK_BONUS_MAX_POINTS * (1.0 - clamped_risk), 2)
 
 # Puntos de Monterrey con antecedentes REALES de inundación/encharcamiento
 # (coordenadas exactas, radio en km, severidad base en [0, 1]). Se usan para
@@ -220,6 +240,37 @@ def point_risk(lat: float, lon: float, shift_state: ShiftState) -> float:
     return max(0.0, min(risk, 1.0))
 
 
+def average_risk_along_path(
+    graph_provider: CityGraphProvider,
+    path_nodes: Tuple[int, ...],
+    shift_state: ShiftState,
+) -> float:
+    """Riesgo promedio muestreado sobre una ruta YA CALCULADA (lista de
+    nodos), sin volver a correr Dijkstra. A diferencia de
+    `route_risk_and_time` (que primero calcula el camino más rápido y LUEGO
+    lo muestrea), esto mide el riesgo del camino físico exacto que un
+    agente de verdad recorrió -- p. ej. el elegido por
+    `RiskAverseAgent.risk_weighted_path`, que puede no ser el más rápido a
+    secas. Puramente síncrona (solo lecturas de diccionario sobre el grafo
+    ya cargado en memoria): segura de llamar desde el cierre determinista
+    del turno o justo después de trazar una ruta, sin I/O ni bloqueo del
+    event loop."""
+    if not path_nodes:
+        return 0.05
+    graph = graph_provider.graph
+    if len(path_nodes) > 12:
+        step = max(1, len(path_nodes) // 12)
+        sampled_nodes = path_nodes[::step]
+    else:
+        sampled_nodes = path_nodes
+
+    point_risks: List[float] = [
+        point_risk(graph.nodes[node]["y"], graph.nodes[node]["x"], shift_state)
+        for node in sampled_nodes
+    ]
+    return sum(point_risks) / len(point_risks) if point_risks else 0.05
+
+
 async def route_risk_and_time(
     graph_provider: CityGraphProvider,
     origin_node: int,
@@ -242,18 +293,7 @@ async def route_risk_and_time(
     if not math.isfinite(travel_time_sec):
         return 1.0, float("inf")
 
-    graph = graph_provider.graph
-    if len(path_nodes) > 12:
-        step = max(1, len(path_nodes) // 12)
-        sampled_nodes = path_nodes[::step]
-    else:
-        sampled_nodes = path_nodes
-
-    point_risks: List[float] = [
-        point_risk(graph.nodes[node]["y"], graph.nodes[node]["x"], shift_state)
-        for node in sampled_nodes
-    ]
-    average_risk = sum(point_risks) / len(point_risks) if point_risks else 0.05
+    average_risk = average_risk_along_path(graph_provider, path_nodes, shift_state)
     return average_risk, travel_time_sec
 
 

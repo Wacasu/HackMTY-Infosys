@@ -50,11 +50,15 @@ def format_tick(message: dict) -> str:
     elapsed_min = shift.get("elapsed_sec", 0) / 60.0
     events = ", ".join(shift.get("active_events", [])) or "CLEAR"
 
+    total_points = (
+        driver.get('points_base', 0)
+        + driver.get('points_risk_bonus', 0)
+    )
     line = (
         f"[{elapsed_min:6.1f} min] {agent:<18} | "
-        f"ganancia=${driver.get('earnings_mxn', 0):>7.2f} | "
+        f"puntos={total_points:>7.2f} (base={driver.get('points_base', 0):.1f} "
+        f"+bonus={driver.get('points_risk_bonus', 0):.1f}) | "
         f"completados={driver.get('orders_completed', 0):>2} | "
-        f"rechazados={driver.get('orders_rejected', 0):>2} | "
         f"timeouts={driver.get('timeouts_incurred', 0)} | "
         f"activos={len(driver.get('active_orders', []))} | "
         f"clima={events}"

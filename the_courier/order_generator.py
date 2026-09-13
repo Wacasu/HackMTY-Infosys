@@ -28,14 +28,21 @@ import random
 from typing import Dict, List
 
 from agent_interface import Offer
-from city_graph import CityGraphProvider
+from city_graph import (
+    CENTRO_MONTERREY_LATITUDE,
+    CENTRO_MONTERREY_LONGITUDE,
+    CENTRO_MONTERREY_RADIUS_M,
+    CityGraphProvider,
+)
 
 logger = logging.getLogger("the_courier.order_generator")
 
-# Parámetros tarifarios base (moneda: MXN), calibrados a un rango realista
-# para repartos de última milla en Monterrey.
-BASE_PICKUP_FEE_MXN = 12.0
-FARE_PER_KM_MXN = 6.5
+# Parámetros del esquema de puntos (antes tarifario en MXN) -- mismos
+# números, reinterpretados: ya no representan un pago monetario, sino los
+# Puntos Base que otorga completar el pedido, calibrados sobre el mismo
+# rango realista de reparto de última milla en Monterrey.
+BASE_POINTS = 12.0
+POINTS_PER_KM = 6.5
 MIN_SERVICE_TIME_SEC = 90
 MAX_SERVICE_TIME_SEC = 240
 
@@ -56,13 +63,61 @@ MIN_TIME_WINDOW_SLACK_SEC = 1200
 MAX_TIME_WINDOW_SLACK_SEC = 3000
 
 EARTH_RADIUS_KM = 6371.0
-# Centro de Monterrey (Macroplaza y alrededores, ~4.5 km de medio-lado desde
-# el depósito) en vez de la zona metropolitana completa: acota las
-# pruebas/demos a una zona chica y siempre dentro del grafo vial que carga
-# `city_graph.py` (radio `CENTRO_MONTERREY_RADIUS_M` = 6 km, dejando ~1.5 km
-# de margen para que ningún pedido caiga cerca del borde del grafo). Las
-# coordenadas se proyectan despues a calles reales.
+
+# Centro de Monterrey (Macroplaza y alrededores) para el generador de
+# pickups/dropoffs ALEATORIOS -- el comportamiento ACTIVO por defecto (ver
+# `FIXED_PICKUPS_ENABLED` más abajo). ~1.5 km de margen respecto al radio
+# real del grafo (`CENTRO_MONTERREY_RADIUS_M` = 6 km en city_graph.py)
+# para que ningún punto caiga cerca del borde. Las coordenadas se
+# proyectan después a calles reales.
 CENTRO_MONTERREY_BOUNDS = (25.6309, 25.7119, -100.3542, -100.2642)
+
+# --------------------------------------------------------------------- #
+# Pickup fijo en CEDIS reales -- PREPARADO PERO INACTIVO.
+# --------------------------------------------------------------------- #
+# `FIXED_PICKUP_LOCATIONS` son 9 CEDIS/parques logísticos reales de la
+# Zona Metropolitana de Monterrey (Apodaca, Escobedo, Santa Catarina,
+# Ciénega de Flores / Salinas Victoria), geocodificados contra
+# OpenStreetMap/Nominatim -- no inventados. La idea: cada pedido recoge en
+# uno de estos puntos (elegido determinísticamente por `random_seed`) en
+# vez de un punto aleatorio cualquiera, con el dropoff aleatorio pero
+# relativo a CADA pickup (`_random_point_near` + `_safe_dropoff_radius_km`,
+# no una caja fija compartida).
+#
+# Todos estos CEDIS quedan a 11-34km del centro -- fuera del radio de 6km
+# que carga `city_graph.py` hoy (ver `ZMM_PLACE_NAMES` ahí). Activarlos
+# con el grafo chico haría que `nearest_node` los colapsara TODOS al borde
+# del círculo, silenciosamente -- exactamente el problema de proyección
+# que se buscaba evitar. Por eso este flag empieza en `False`: actívalo
+# junto con la cobertura de ZMM completa en `city_graph.py` (ver el
+# comentario ahí sobre el bloqueo de red pendiente), no antes.
+FIXED_PICKUPS_ENABLED = False
+
+FIXED_PICKUP_LOCATIONS: tuple[dict, ...] = (
+    {"name": "Interpuerto Monterrey (Salinas Victoria)", "lat": 25.928985, "lon": -100.286737},
+    {"name": "Parque Industrial STIVA Aeropuerto (Apodaca)", "lat": 25.779898, "lon": -100.146156},
+    {"name": "FINSA Apodaca", "lat": 25.774069, "lon": -100.170289},
+    {"name": "Parque Industrial y de Negocios Nexxus XXI (Escobedo)", "lat": 25.771138, "lon": -100.307076},
+    {"name": "FINSA II (Santa Catarina)", "lat": 25.717654, "lon": -100.514414},
+    {"name": "VYNMSA Santa Catarina Industrial Park", "lat": 25.725834, "lon": -100.518128},
+    {"name": "Parque Industrial Kalos (Santa Catarina)", "lat": 25.689297, "lon": -100.483162},
+    {"name": "Parque Industrial Las Palmas (Santa Catarina)", "lat": 25.698913, "lon": -100.469809},
+    {"name": "Ciénega de Flores (corredor industrial)", "lat": 25.953326, "lon": -100.187424},
+)
+
+# Qué tan lejos del CEDIS de origen puede caer un dropoff, en km -- da
+# variedad de "última milla" real sin necesitar que el grafo cubra viajes
+# absurdamente largos de una punta a otra de la ZMM.
+DROPOFF_RADIUS_KM = 6.0
+
+# Margen de seguridad (km) para nunca generar un dropoff más allá del
+# radio real del grafo cargado (`CENTRO_MONTERREY_RADIUS_M` en
+# city_graph.py) -- sin esto, un CEDIS ya cerca del borde del grafo
+# (p. ej. Ciénega de Flores) podría generar dropoffs FUERA del área
+# cargada, que `nearest_node` colapsaría silenciosamente al nodo más
+# cercano disponible (el mismo problema de proyección que motivó fijar
+# estos pickups con coordenadas reales en primer lugar).
+GRAPH_RADIUS_SAFETY_MARGIN_KM = 1.5
 
 
 def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -143,8 +198,12 @@ class OrderGenerator:
             # re-muestreando el dropoff para que el pedido tenga sentido.
             attempts = 0
             while dropoff_node == pickup_node and attempts < 5:
-                record["dropoff_lat"], record["dropoff_lon"] = self._random_point_in_centro(
-                    rng)
+                if FIXED_PICKUPS_ENABLED:
+                    record["dropoff_lat"], record["dropoff_lon"] = self._random_point_near(
+                        rng, record["pickup_lat"], record["pickup_lon"], record["dropoff_radius_km"]
+                    )
+                else:
+                    record["dropoff_lat"], record["dropoff_lon"] = self._random_point_in_centro(rng)
                 dropoff_node = await graph_provider.nearest_node(
                     record["dropoff_lat"], record["dropoff_lon"]
                 )
@@ -159,8 +218,8 @@ class OrderGenerator:
                 record["dropoff_lat"],
                 record["dropoff_lon"],
             )
-            base_fare = round(
-                BASE_PICKUP_FEE_MXN + FARE_PER_KM_MXN *
+            base_points = round(
+                BASE_POINTS + POINTS_PER_KM *
                 max(straight_line_km, 0.3), 2
             )
 
@@ -175,7 +234,7 @@ class OrderGenerator:
                 ready_time_sec=record["ready_time_sec"],
                 due_time_sec=record["due_time_sec"],
                 service_time_sec=record["service_time_sec"],
-                base_fare_mxn=base_fare,
+                base_points=base_points,
                 straight_line_distance_km=round(straight_line_km, 3),
             )
             self._orders.append(offer)
@@ -190,10 +249,52 @@ class OrderGenerator:
 
     @staticmethod
     def _random_point_in_centro(rng: random.Random) -> tuple[float, float]:
+        """Punto aleatorio dentro de `CENTRO_MONTERREY_BOUNDS` -- el
+        comportamiento ACTIVO por defecto (`FIXED_PICKUPS_ENABLED = False`),
+        usado tanto para pickup como para dropoff."""
         min_lat, max_lat, min_lon, max_lon = CENTRO_MONTERREY_BOUNDS
         lat = rng.uniform(min_lat, max_lat)
         lon = rng.uniform(min_lon, max_lon)
         return lat, lon
+
+    @staticmethod
+    def _safe_dropoff_radius_km(pickup_lat: float, pickup_lon: float) -> float:
+        """Radio máximo (km) en el que puede caer un dropoff alrededor de
+        `pickup_lat/lon` sin arriesgarse a salir del grafo vial cargado.
+        Los CEDIS cerca del borde del grafo (radio `CENTRO_MONTERREY_RADIUS_M`)
+        obtienen un radio más chico que los que están bien adentro."""
+        graph_radius_km = CENTRO_MONTERREY_RADIUS_M / 1000.0
+        distance_from_center_km = _haversine_km(
+            CENTRO_MONTERREY_LATITUDE, CENTRO_MONTERREY_LONGITUDE,
+            pickup_lat, pickup_lon,
+        )
+        headroom_km = graph_radius_km - GRAPH_RADIUS_SAFETY_MARGIN_KM - distance_from_center_km
+        return max(0.3, min(DROPOFF_RADIUS_KM, headroom_km))
+
+    @staticmethod
+    def _random_point_near(
+        rng: random.Random, center_lat: float, center_lon: float, radius_km: float
+    ) -> tuple[float, float]:
+        """Punto aleatorio dentro de un círculo de `radius_km` alrededor de
+        `center_lat/lon`, con densidad uniforme por área (no por radio --
+        por eso la raíz cuadrada: sin ella, los puntos se amontonarían
+        cerca del centro). Se usa para generar el dropoff de "última milla"
+        de cada pedido relativo a su CEDIS de origen."""
+        distance_km = radius_km * math.sqrt(rng.random())
+        bearing_rad = rng.uniform(0, 2 * math.pi)
+        angular_distance = distance_km / EARTH_RADIUS_KM
+
+        lat_rad = math.radians(center_lat)
+        lon_rad = math.radians(center_lon)
+        new_lat_rad = math.asin(
+            math.sin(lat_rad) * math.cos(angular_distance)
+            + math.cos(lat_rad) * math.sin(angular_distance) * math.cos(bearing_rad)
+        )
+        new_lon_rad = lon_rad + math.atan2(
+            math.sin(bearing_rad) * math.sin(angular_distance) * math.cos(lat_rad),
+            math.cos(angular_distance) - math.sin(lat_rad) * math.sin(new_lat_rad),
+        )
+        return math.degrees(new_lat_rad), math.degrees(new_lon_rad)
 
     def _generate_solomon_style_records(
         self, rng: random.Random, num_orders: int
@@ -204,8 +305,17 @@ class OrderGenerator:
         bounding box de Monterrey."""
         records: List[dict] = []
         for order_id in range(1, num_orders + 1):
-            pickup_lat, pickup_lon = self._random_point_in_centro(rng)
-            dropoff_lat, dropoff_lon = self._random_point_in_centro(rng)
+            if FIXED_PICKUPS_ENABLED:
+                pickup_location = rng.choice(FIXED_PICKUP_LOCATIONS)
+                pickup_lat, pickup_lon = pickup_location["lat"], pickup_location["lon"]
+                dropoff_radius_km = self._safe_dropoff_radius_km(pickup_lat, pickup_lon)
+                dropoff_lat, dropoff_lon = self._random_point_near(
+                    rng, pickup_lat, pickup_lon, dropoff_radius_km
+                )
+            else:
+                pickup_lat, pickup_lon = self._random_point_in_centro(rng)
+                dropoff_lat, dropoff_lon = self._random_point_in_centro(rng)
+                dropoff_radius_km = None
 
             # Reparte los `ready_time_sec` de forma pareja a lo largo del
             # turno (con jitter chico), no uniforme al azar -- el azar puro
@@ -258,6 +368,7 @@ class OrderGenerator:
                     "pickup_lon": pickup_lon,
                     "dropoff_lat": dropoff_lat,
                     "dropoff_lon": dropoff_lon,
+                    "dropoff_radius_km": dropoff_radius_km,
                     "ready_time_sec": ready_time_sec,
                     "due_time_sec": due_time_sec,
                     "service_time_sec": service_time_sec,

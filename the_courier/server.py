@@ -50,7 +50,14 @@ from city_graph import CityGraphProvider, get_city_graph_provider, peek_city_gra
 from greedy_agent import GreedyAgent
 from order_generator import OrderGenerator
 from risk_averse_agent import RiskAverseAgent
-from risk_model import ACCIDENT_HOTSPOTS, FLOOD_PRONE_ZONES
+from risk_model import (
+    ACCIDENT_HOTSPOTS,
+    FLOOD_PRONE_ZONES,
+    SAFETY_HARD_RISK_LIMIT,
+    average_risk_along_path,
+    risk_bonus_points,
+)
+from weather_service import fetch_current_weather
 
 logger = logging.getLogger("the_courier.server")
 logging.basicConfig(level=logging.INFO)
@@ -83,35 +90,6 @@ MAX_BATCH_ORDERS_FOR_ROUTE_PLANNING = 3
 # seguridad para que la SIMULACIÓN avance, no una garantía de que ese
 # hilo huérfano deje de trabajar en el acto.
 ROUTE_PLANNING_TIMEOUT_SEC = 3.0
-
-# Tope de pedidos ACEPTADOS que un repartidor puede traer sin entregar a la
-# vez. Sin este límite, un agente podía seguir aceptando ofertas nuevas con
-# buen pago por minuto EN AISLAMIENTO sin considerar que ya trae una cola
-# larga -- cada aceptación nueva empuja a las más viejas más atrás en el
-# batch de planificación (ver MAX_BATCH_ORDERS_FOR_ROUTE_PLANNING), y un
-# pedido que no es de los `MAX_BATCH_ORDERS_FOR_ROUTE_PLANNING` más urgentes
-# puede quedarse esperando turno indefinidamente mientras llegan pedidos
-# más urgentes -- entregándose, cuando por fin le toca, muy después de que
-# venció su ventana de tiempo (medido en pruebas reales: hasta 26 minutos
-# tarde), sin que el modelo lo reconozca ni lo evite. Este tope se aplica
-# ANTES de pasarle la oferta al agente -- es una restricción de capacidad
-# del repartidor, no una decisión de negocio, así que se centraliza aquí en
-# vez de duplicarse en cada agente.
-#
-# 3 (= MAX_BATCH_ORDERS_FOR_ROUTE_PLANNING) se probó primero, pero midiendo
-# en vivo resultó demasiado ajustado: como el umbral de rentabilidad de
-# Risk-averse es más bajo que el de Greedy (acepta más fácil por diseño --
-# ver MIN_ACCEPTABLE_RISK_ADJUSTED_MXN_PER_MINUTE vs
-# MIN_ACCEPTABLE_MXN_PER_MINUTE), llenaba sus 3 cupos casi de inmediato y se
-# quedaba "lleno" la mayor parte del turno -- en una prueba controlada
-# (clima despejado, mismo seed), el 75% de sus rechazos eran solo por cupo
-# lleno, contra ~33% en Greedy, dejándolo sistemáticamente sin poder tomar
-# pedidos mejores que llegaban después. Subirlo a 5 le da más margen para
-# seguir aceptando sin reabrir el problema original (5 pedidos en cola
-# sigue siendo un tope finito, y el KPI "Tarde" ya reporta honestamente
-# cualquier entrega que de todos modos llegue fuera de ventana, en vez de
-# depender de que el tope la prevenga por completo).
-MAX_CONCURRENT_ACTIVE_ORDERS = 5
 
 # Construidos a partir de la MISMA fuente que usa `risk_model.py` para
 # calcular el riesgo de verdad (antes esto era una lista fabricada aparte,
@@ -273,6 +251,14 @@ class ShiftSimulatorEngine:
         self._travel_to_pickup_sec: float = 0.0
         self._route_nodes: List[int] = []
         self._current_route: List[dict] = []
+        # Riesgo promedio medido sobre la ruta FÍSICA que de verdad se está
+        # recorriendo para el pedido en curso (recalculado en
+        # `_commit_route_to_offer` cada vez que se traza o retraza la
+        # ruta). Es lo que decide el Bonus de Riesgo real al completar el
+        # pedido -- no el riesgo estimado al momento de aceptar la oferta,
+        # que puede quedar desactualizado si el entorno cambió a mitad de
+        # camino.
+        self._current_order_risk: Optional[float] = None
         self._recent_decisions: List[AgentDecision] = []
         # Versión de `LiveEnvironment` vigente cuando se calculó la ruta
         # física actual. Si el entorno cambia (evento sorpresa inyectado)
@@ -292,7 +278,21 @@ class ShiftSimulatorEngine:
             yield snapshot
             await asyncio.sleep(self._config.tick_interval_sec / self._config.time_scale)
 
+        self._finalize_shift_points()
         yield self._build_snapshot(self._current_shift_state(elapsed_sec), shift_ended=True)
+
+    def _finalize_shift_points(self) -> None:
+        """Cierre determinista del turno: con aceptación obligatoria y sin
+        ningún filtro de admisión, es esperable que queden pedidos en
+        `active_orders` sin entregar cuando se acaba el tiempo -- su valor
+        en puntos nunca se cobró y se expone aquí como KPI ('Puntos no
+        obtenidos por falta de tiempo'). Aritmética simple sobre datos que
+        YA están en memoria (ningún Dijkstra, ninguna llamada a
+        `CityGraphProvider`) para que el cierre del turno sea determinista
+        y no pueda bloquear ni colgar el event loop."""
+        self.driver_state.points_lost_timeout = round(
+            sum(order.base_points for order in self.driver_state.active_orders), 2
+        )
 
     async def _tick(self, elapsed_sec: int) -> dict:
         shift_state = self._current_shift_state(elapsed_sec)
@@ -346,29 +346,12 @@ class ShiftSimulatorEngine:
         )
 
     async def _evaluate_new_offer(self, order_id: int, shift_state: ShiftState) -> None:
+        """Aceptación OBLIGATORIA: toda oferta entra a `active_orders` sin
+        excepción, sin cupo máximo y sin importar el riesgo que mida el
+        agente. Lo único que puede variar aquí es qué tan rápido calculó el
+        agente su puntuación informativa -- nunca si la oferta se queda o
+        no."""
         offer = self._order_generator.get_offer(order_id)
-
-        # Restricción de capacidad, aplicada ANTES de ofrecerle el pedido
-        # al agente: con la cola ya llena, ni siquiera se evalúa el pago --
-        # ver `MAX_CONCURRENT_ACTIVE_ORDERS` sobre por qué.
-        if len(self.driver_state.active_orders) >= MAX_CONCURRENT_ACTIVE_ORDERS:
-            decision = AgentDecision(
-                order_id=order_id,
-                accepted=False,
-                score=0.0,
-                estimated_travel_time_sec=0.0,
-                reasoning=(
-                    f"Rechazado: ya trae {len(self.driver_state.active_orders)} pedidos "
-                    f"activos sin entregar (máximo {MAX_CONCURRENT_ACTIVE_ORDERS}); debe "
-                    "completar alguno antes de aceptar más, sin importar qué tan bien pague."
-                ),
-                decision_latency_ms=0.0,
-            )
-            self._recent_decisions.append(decision)
-            if len(self._recent_decisions) > MAX_RECENT_DECISIONS_KEPT:
-                self._recent_decisions.pop(0)
-            self.driver_state.orders_rejected += 1
-            return
 
         started_at = time.perf_counter()
         try:
@@ -380,15 +363,23 @@ class ShiftSimulatorEngine:
             decision.decision_latency_ms = round(
                 (time.perf_counter() - started_at) * 1000.0, 1)
         except asyncio.TimeoutError:
+            # Ni siquiera una decisión lenta puede rechazar la oferta bajo
+            # aceptación obligatoria -- se acepta igual (entra a la cola) y
+            # solo se registra que esta decisión en particular raspó el
+            # límite duro de 200 ms, para el KPI `timeouts_incurred`. El
+            # riesgo/bonus real de este pedido se recalcula de todos modos
+            # sobre la ruta física que el motor de verdad recorra para
+            # entregarlo (ver `_commit_route_to_offer`).
             self.driver_state.timeouts_incurred += 1
             decision = AgentDecision(
                 order_id=order_id,
-                accepted=False,
                 score=0.0,
                 estimated_travel_time_sec=0.0,
                 reasoning=(
-                    f"Timeout: el agente no respondió en {self._config.decision_timeout_ms} ms; "
-                    "la oferta se rechaza automáticamente por seguridad."
+                    f"Aceptado (aceptación obligatoria): el cálculo de "
+                    f"riesgo/puntos no terminó en {self._config.decision_timeout_ms} ms; "
+                    "se acepta de todos modos y se recalculará el riesgo real "
+                    "al momento de rutear."
                 ),
                 timed_out=True,
                 decision_latency_ms=float(self._config.decision_timeout_ms),
@@ -398,17 +389,7 @@ class ShiftSimulatorEngine:
         if len(self._recent_decisions) > MAX_RECENT_DECISIONS_KEPT:
             self._recent_decisions.pop(0)
 
-        if decision.accepted:
-            self.driver_state.active_orders.append(offer)
-            if decision.estimated_risk is not None:
-                self.driver_state.accepted_risk_sum += decision.estimated_risk
-                self.driver_state.accepted_risk_count += 1
-            if decision.exceeds_safety_threshold:
-                self.driver_state.risky_orders_accepted += 1
-        else:
-            self.driver_state.orders_rejected += 1
-            if decision.hard_safety_violation:
-                self.driver_state.safety_rejections += 1
+        self.driver_state.active_orders.append(offer)
 
     async def _advance_route_plan(self, shift_state: ShiftState) -> None:
         active_orders = self.driver_state.active_orders
@@ -444,8 +425,24 @@ class ShiftSimulatorEngine:
             )
             order_sequence = [o.order_id for o in batch_orders]
 
+        # Red de seguridad: un `plan_route` puede legítimamente devolver
+        # menos pedidos de los que hay en cola (ruteo orientado a puntos),
+        # pero NUNCA debe dejar al repartidor detenido teniendo pedidos sin
+        # entregar. Si la secuencia sale vacía y todavía hay cola, se
+        # atiende en orden de urgencia: entregar tarde sigue cobrando los
+        # puntos base y se reporta en el KPI "Tarde", que siempre es mejor
+        # que quedarse parado sin cobrar nada.
         if not order_sequence:
-            return
+            if not batch_orders:
+                return
+            order_sequence = [
+                o.order_id for o in sorted(batch_orders, key=lambda o: o.due_time_sec)
+            ]
+            logger.info(
+                "%s: la planificacion no selecciono ningun pedido con %d en cola; "
+                "se atiende el mas urgente para no dejar al repartidor detenido.",
+                self.agent.name, len(batch_orders),
+            )
 
         next_order_id = order_sequence[0]
         offer = next(o for o in active_orders if o.order_id == next_order_id)
@@ -524,6 +521,14 @@ class ShiftSimulatorEngine:
         self._route_travel_sec = max(travel_to_pickup_sec + travel_to_dropoff_sec, 0.0)
         self._route_elapsed_sec = 0.0
         self._route_environment_version = self._environment.version
+        # Riesgo REAL de la ruta física que se acaba de trazar (no el
+        # estimado al aceptar la oferta): muestreado sobre `route_nodes`
+        # directamente, sin volver a correr Dijkstra -- son los mismos
+        # nodos que el repartidor de verdad va a recorrer y que
+        # `_advance_visual_position` ya usa para animarlo.
+        self._current_order_risk = average_risk_along_path(
+            self._graph_provider, tuple(route_nodes), shift_state
+        )
 
         self._current_order = offer
         self._remaining_time_sec = (
@@ -534,9 +539,27 @@ class ShiftSimulatorEngine:
         offer = self._current_order
         assert offer is not None
 
-        self.driver_state.earnings_mxn = round(
-            self.driver_state.earnings_mxn + offer.base_fare_mxn, 2
+        # Puntos Base Obtenidos: se cobran al ENTREGAR, no al aceptar -- un
+        # pedido que quede huérfano en `active_orders` al cerrar el turno
+        # nunca pasa por aquí (ver `_finalize_shift_points`).
+        self.driver_state.points_base = round(
+            self.driver_state.points_base + offer.base_points, 2
         )
+
+        # Bonus de Riesgo: sobre el riesgo REAL medido de la ruta física que
+        # se acaba de recorrer (`_current_order_risk`), no el estimado al
+        # momento de aceptar la oferta -- así un reruteo a mitad de camino
+        # (evento sorpresa) se refleja en el bonus que de verdad se cobra.
+        weighted_risk = self._current_order_risk
+        if weighted_risk is not None:
+            self.driver_state.points_risk_bonus = round(
+                self.driver_state.points_risk_bonus + risk_bonus_points(weighted_risk), 2
+            )
+            self.driver_state.total_risk_sum += weighted_risk
+            self.driver_state.total_risk_count += 1
+            if weighted_risk >= SAFETY_HARD_RISK_LIMIT:
+                self.driver_state.risky_orders_handled += 1
+
         self.driver_state.distance_traveled_km = round(
             self.driver_state.distance_traveled_km + offer.straight_line_distance_km, 2
         )
@@ -554,6 +577,7 @@ class ShiftSimulatorEngine:
             o for o in self.driver_state.active_orders if o.order_id != offer.order_id
         ]
         self._current_order = None
+        self._current_order_risk = None
         self._remaining_time_sec = 0.0
         self._route_travel_sec = 0.0
         self._route_elapsed_sec = 0.0
@@ -725,6 +749,18 @@ async def shift_simulation_ws(websocket: WebSocket) -> None:
         shift_duration_sec=config.shift_duration_sec,
     )
     environment = LiveEnvironment()
+
+    # El turno arranca con el clima REAL de Monterrey en este instante
+    # (Open-Meteo, ver weather_service.py), no despejado por default. Los
+    # botones de "Evento sorpresa" del panel siguen funcionando igual por
+    # encima de esto -- son para disparar algo dramático a mitad de turno
+    # bajo demanda, no para simular el clima real (eso ya lo hace esto).
+    # Si la API no responde, `fetch_current_weather` devuelve `None` y el
+    # turno arranca en CLEAR sin bloquearse esperando la red.
+    real_weather = await fetch_current_weather(DEPOT_LATITUDE, DEPOT_LONGITUDE)
+    if real_weather is not None and real_weather.event != WeatherEvent.CLEAR:
+        environment.apply_event(real_weather.event, real_weather.severity)
+
     session_id = uuid4().hex
     session = SimulationSession(
         session_id=session_id,
@@ -768,6 +804,19 @@ async def shift_simulation_ws(websocket: WebSocket) -> None:
             "depot": {"lat": DEPOT_LATITUDE, "lon": DEPOT_LONGITUDE},
             "flood_zones": FLOOD_ZONE_PAYLOAD,
             "accident_hotspots": ACCIDENT_HOTSPOT_PAYLOAD,
+            "real_weather": (
+                {
+                    "event_type": real_weather.event.value,
+                    "severity": real_weather.severity,
+                    "temperature_c": real_weather.temperature_c,
+                    "precipitation_mm": real_weather.precipitation_mm,
+                    "wind_speed_kph": real_weather.wind_speed_kph,
+                    "description": real_weather.description,
+                    "source": real_weather.source,
+                }
+                if real_weather is not None
+                else None
+            ),
         }
     )
 

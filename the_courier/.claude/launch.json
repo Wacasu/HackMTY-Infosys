@@ -4,8 +4,8 @@
     {
       "name": "the-courier-server",
       "runtimeExecutable": ".venv\\Scripts\\python.exe",
-      "runtimeArgs": ["-m", "uvicorn", "server:app", "--reload", "--port", "8010"],
-      "port": 8010
+      "runtimeArgs": ["-m", "uvicorn", "server:app", "--reload", "--port", "8011"],
+      "port": 8011
     }
   ]
 }
