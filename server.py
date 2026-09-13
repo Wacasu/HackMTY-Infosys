@@ -667,6 +667,9 @@ async def simulation_meta() -> dict:
     }
 
 
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+
 @app.get("/")
 async def visual_lab() -> FileResponse:
     return FileResponse(STATIC_DIR / "index.html")
