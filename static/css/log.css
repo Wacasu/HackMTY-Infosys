@@ -1,11 +1,11 @@
     .log {
       font-family: "IBM Plex Mono", monospace;
       font-size: 11px;
-      line-height: 1.45;
+      line-height: 1.5;
       color: var(--muted);
     }
 
-    .log>div {
+    .log > div {
       animation: log-in 220ms ease;
       padding: 2px 0;
     }
@@ -15,7 +15,6 @@
         opacity: 0;
         transform: translateY(-4px);
       }
-
       to {
         opacity: 1;
         transform: translateY(0);
@@ -37,13 +36,13 @@
     .log .event {
       color: #f4cf8a;
       border-left: 2px solid var(--warn);
-      padding-left: 6px;
+      padding-left: var(--space-2);
     }
 
     .log .latency {
       display: inline-block;
       font-size: 10px;
-      padding: 1px 5px;
+      padding: 1px var(--space-1);
       border-radius: 999px;
       background: var(--bg-3);
       border: 1px solid var(--stroke);
@@ -61,14 +60,11 @@
       border-color: #4a2a2a;
     }
 
-    /* Recogida/entrega: su propia línea (no una decisión de aceptar/
-       rechazar), con un borde del color del agente para que salte a la
-       vista dentro del feed sin tener que leer el texto completo. */
     .log .pickup,
     .log .delivered {
       display: block;
       border-left: 2px solid var(--agent-color, var(--muted));
-      padding-left: 6px;
+      padding-left: var(--space-2);
       font-weight: 600;
     }
 
@@ -89,9 +85,6 @@
       font-weight: 400;
     }
 
-    /* Entregado fuera de su ventana de tiempo: se aceptó a tiempo, pero
-       para cuando le tocó turno en la cola ya había vencido -- se marca
-       distinto en vez de verse idéntico a una entrega puntual. */
     .log .delivered.late {
       --agent-color: var(--warn);
       color: var(--warn);

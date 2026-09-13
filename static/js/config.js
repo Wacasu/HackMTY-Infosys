@@ -108,7 +108,7 @@
     document.getElementById("presentToggle").addEventListener("click", (e) => {
       const app = document.querySelector(".app");
       const isPresent = app.classList.toggle("present");
-      e.currentTarget.textContent = isPresent ? "🗂 Ver panel completo" : "🎤 Modo presentación";
+      e.currentTarget.textContent = isPresent ? "Ver panel completo" : "Modo presentacion";
       e.currentTarget.classList.toggle("active", isPresent);
       // Leaflet no recalcula su tamaño solo: hay que avisarle tras el
       // cambio de layout, cuando el CSS ya terminó de aplicarse.

@@ -1,19 +1,17 @@
+    /* ---- 3-column layout ---- */
     .layout {
       display: grid;
-      grid-template-columns: 280px minmax(0, 1fr) 320px;
+      grid-template-columns: 260px minmax(0, 1fr) 320px;
       min-height: 0;
       flex: 1 1 auto;
     }
 
-    /* Los parámetros de arranque (semilla, pedidos, turno…) solo importan
-       antes de darle a "Iniciar turno" -- una vez corriendo el turno, solo
-       estorban altura que le vendría bien al feed de eventos. Colapsable
-       igual que el panel de impacto, con su propia preferencia recordada. */
+    /* ---- Collapsible config header ---- */
     .config-header {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 6px;
+      gap: var(--space-2);
     }
 
     .config-header h3 {
@@ -23,7 +21,7 @@
     .config-toggle {
       background: none;
       border: none;
-      padding: 2px 4px;
+      padding: 2px var(--space-1);
       margin: 0;
       color: var(--muted);
       cursor: pointer;
@@ -47,7 +45,7 @@
       overflow: hidden;
       max-height: 320px;
       opacity: 1;
-      margin-top: 10px;
+      margin-top: var(--space-3);
       transition: max-height 280ms ease, opacity 200ms ease, margin-top 280ms ease;
     }
 
@@ -57,14 +55,18 @@
       margin-top: 0;
     }
 
+    /* ---- Sidebars ---- */
     aside,
     .feed {
       position: relative;
       z-index: 2;
       border-right: 1px solid var(--stroke);
       overflow: auto;
-      padding: 14px;
+      padding: var(--space-4);
       background: var(--bg-2);
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-3);
     }
 
     .feed {
@@ -72,6 +74,7 @@
       border-left: 1px solid var(--stroke);
     }
 
+    /* ---- Map area ---- */
     .map-wrap {
       position: relative;
       z-index: 0;
@@ -86,11 +89,12 @@
       background: #cfd6de;
     }
 
+    /* ---- Form elements ---- */
     label {
       display: block;
       font-size: 11px;
       color: var(--muted);
-      margin: 10px 0 4px;
+      margin: var(--space-3) 0 var(--space-1);
       text-transform: uppercase;
       letter-spacing: 0.06em;
     }
@@ -104,19 +108,21 @@
       background: var(--bg);
       border: 1px solid var(--stroke);
       color: var(--text);
-      padding: 7px 8px;
+      padding: var(--space-2);
       font-family: "IBM Plex Mono", monospace;
       font-size: 12px;
       border-radius: var(--radius-sm);
+      transition: border-color 150ms ease;
     }
 
-    /* Traducción en vivo de un campo a otra unidad más útil para leer de
-       un vistazo (p. ej. horas de turno -> segundos reales que tarda en
-       reproducirse a la velocidad actual), sin ocupar el espacio de otro
-       campo del formulario. */
+    input[type="number"]:focus {
+      border-color: var(--accent);
+      outline: none;
+    }
+
     .field-hint {
       display: block;
-      margin-top: 4px;
+      margin-top: var(--space-1);
       font-size: 10px;
       color: var(--muted);
       font-family: "IBM Plex Mono", monospace;
@@ -125,20 +131,21 @@
     .row-2 {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 8px;
+      gap: var(--space-2);
     }
 
+    /* ---- Actions row ---- */
     .actions {
       display: flex;
-      gap: 8px;
-      margin-top: 14px;
+      gap: var(--space-2);
+      margin-top: var(--space-4);
     }
 
     button {
       border: 1px solid var(--stroke);
       background: var(--bg-3);
       color: var(--text);
-      padding: 8px 10px;
+      padding: var(--space-2) var(--space-3);
       cursor: pointer;
       font-size: 12px;
       font-weight: 500;
@@ -170,49 +177,55 @@
       transform: none;
     }
 
+    /* ---- Event buttons grid ---- */
     .events {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 6px;
-      margin-top: 8px;
+      gap: var(--space-2);
+      margin-top: var(--space-2);
     }
 
     .events button {
       font-size: 11px;
+      padding: var(--space-2);
     }
 
+    /* ---- Map overlays ---- */
     .legend {
       position: absolute;
       z-index: 500;
-      left: 12px;
-      bottom: 12px;
-      background: rgba(14, 17, 22, 0.88);
+      left: var(--space-3);
+      bottom: var(--space-3);
+      background: rgba(14, 17, 22, 0.9);
       border: 1px solid var(--stroke);
-      padding: 8px 10px;
+      padding: var(--space-2) var(--space-3);
       font-size: 11px;
       color: var(--muted);
       border-radius: var(--radius-sm);
+      line-height: 1.7;
     }
 
     .legend span {
       display: inline-block;
       width: 10px;
       height: 10px;
-      margin-right: 6px;
+      margin-right: var(--space-2);
       vertical-align: middle;
       border-radius: 3px;
     }
 
+    /* ---- Agent cards at bottom ---- */
     .agents {
       display: grid;
       grid-template-columns: 1fr 1fr;
       border-top: 1px solid var(--stroke);
       flex: 0 0 auto;
+      background: var(--bg-2);
     }
 
     .agent {
-      padding: 12px 16px;
-      min-height: 168px;
+      padding: var(--space-3) var(--space-4);
+      min-height: 172px;
     }
 
     .agent.greedy {
@@ -220,8 +233,9 @@
     }
 
     .agent h2 {
-      margin: 0 0 8px;
+      margin: 0 0 var(--space-2);
       font-size: 13px;
+      font-weight: 700;
     }
 
     .agent.greedy h2 {
@@ -235,14 +249,15 @@
     .kpis {
       display: grid;
       grid-template-columns: repeat(5, 1fr);
-      gap: 8px;
+      gap: var(--space-2);
     }
 
     .kpi {
-      background: var(--bg-2);
+      background: var(--bg-card);
       border: 1px solid var(--stroke);
-      padding: 8px;
+      padding: var(--space-2);
       border-radius: var(--radius-sm);
+      text-align: center;
     }
 
     .kpi.flash {
@@ -250,18 +265,9 @@
     }
 
     @keyframes kpi-flash {
-      0% {
-        background: var(--bg-2);
-      }
-
-      30% {
-        background: var(--bg-4);
-        transform: translateY(-1px);
-      }
-
-      100% {
-        background: var(--bg-2);
-      }
+      0% { background: var(--bg-card); }
+      30% { background: var(--bg-4); transform: translateY(-1px); }
+      100% { background: var(--bg-card); }
     }
 
     .kpi b {
@@ -269,44 +275,47 @@
       font-family: "IBM Plex Mono", monospace;
       font-size: 16px;
       font-weight: 600;
+      line-height: 1.2;
     }
 
     .kpi span {
-      font-size: 10px;
+      display: block;
+      font-size: 9px;
       color: var(--muted);
       text-transform: uppercase;
       letter-spacing: 0.05em;
+      margin-top: var(--space-1);
     }
 
     .current {
-      margin-top: 8px;
+      margin-top: var(--space-2);
       font-size: 12px;
       color: var(--muted);
       min-height: 18px;
     }
 
+    /* ---- Chart canvas ---- */
     canvas {
       width: 100%;
       height: 72px;
       display: block;
-      margin-top: 10px;
+      margin-top: var(--space-2);
       background: var(--bg);
       border: 1px solid var(--stroke);
       border-radius: var(--radius-sm);
     }
 
+    /* ---- Section headings ---- */
     h3 {
-      margin: 0 0 8px;
+      margin: 0 0 var(--space-2);
       font-size: 12px;
       color: var(--muted);
-      font-weight: 500;
+      font-weight: 600;
       text-transform: uppercase;
       letter-spacing: 0.06em;
     }
 
-    /* Modo presentación: oculta configuración y feed, deja solo el mapa,
-       la barra de carrera y el resumen de agentes — pensado para exponer
-       ante un jurado sin ruido visual. */
+    /* ---- Presentation mode ---- */
     .app.present aside,
     .app.present .feed {
       display: none;
@@ -316,13 +325,8 @@
       grid-template-columns: 1fr;
     }
 
+    /* ---- Responsive ---- */
     @media (max-width: 1100px) {
-
-      /* Bajo este ancho dejamos de forzar todo dentro de un viewport fijo
-         con scroll interno por panel: eso aplasta `.layout` (mapa +
-         configuración + feed) contra `.agents`, que siempre reserva su
-         alto natural. En vez de eso, la página entera crece y hace scroll
-         normal, como cualquier sitio responsive. */
       html,
       body {
         height: auto;
@@ -363,5 +367,9 @@
 
       .race-row {
         grid-template-columns: 120px 1fr 78px;
+      }
+
+      .impact-section {
+        max-height: none !important;
       }
     }

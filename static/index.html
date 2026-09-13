@@ -34,7 +34,7 @@
           <div id="simClock">08:00:00</div>
           <span id="simClockMeta">hora simulada · detenido · velocidad 80x</span>
         </div>
-        <button id="presentToggle" class="ghost-btn" type="button">🎤 Modo presentación</button>
+        <button id="presentToggle" class="ghost-btn" type="button">Modo presentacion</button>
         <div id="status" class="status-pill">Listo para simular</div>
       </div>
     </header>
@@ -42,13 +42,12 @@
       <div id="shiftProgress" class="progress-fill"></div>
     </div>
     <div class="explainer">
-      <span class="chip greedy">🟠 Greedy</span> maximiza ganancia bruta e ignora el riesgo por diseño
+      <span class="chip greedy">Greedy</span> maximiza ganancia bruta e ignora el riesgo por diseño
       <span class="sep">·</span>
-      <span class="chip smart">🟢 Risk-averse</span> pondera Te + α·Re: puede ganar menos pero evita zonas
+      <span class="chip smart">Risk-averse</span> pondera Te + a- Re: puede ganar menos pero evita zonas
       peligrosas y re-rutea cuando hay un evento activo
       <span class="sep">·</span>
-      cada decisión se toma bajo un límite duro de <strong>200 ms</strong> (ms real por
-      decisión visible en el feed) o se rechaza automáticamente
+      cada decision se toma bajo un limite duro de <strong>200 ms</strong> o se rechaza automaticamente
     </div>
     <div id="eventBanner" class="event-banner">
       <span id="eventIcon" class="event-icon"></span>
@@ -57,14 +56,14 @@
 
     <div class="race" id="race">
       <div class="race-row greedy" id="raceGreedy">
-        <div class="race-label"><span class="dot"></span>Greedy <small>(α=0)</small></div>
+        <div class="race-label"><span class="dot"></span>Greedy <small>(a=0)</small></div>
         <div class="race-track">
           <div class="race-fill" id="raceFillGreedy"></div>
         </div>
         <div class="race-value" id="raceValueGreedy">$0.00</div>
       </div>
       <div class="race-row smart" id="raceSmart">
-        <div class="race-label"><span class="dot"></span>Risk-averse <small id="raceAlphaLabel">(α=0.35)</small>
+        <div class="race-label"><span class="dot"></span>Risk-averse <small id="raceAlphaLabel">(a=0.35)</small>
         </div>
         <div class="race-track">
           <div class="race-fill" id="raceFillSmart"></div>
@@ -73,66 +72,12 @@
       </div>
     </div>
 
-    <div class="impact" id="impact">
-      <button class="impact-toggle" id="impactToggle" type="button" aria-expanded="false">
-        <span class="chevron">▾</span> 🛡️ Impacto de seguridad
-        <span class="impact-toggle-hint" id="impactToggleHint">— corre un turno para verlo</span>
-      </button>
-      <div class="impact-body" id="impactBody">
-        <div class="impact-head">
-          <div class="impact-cost">
-            <label for="incidentCost">Costo promedio por incidente vial</label>
-            <input id="incidentCost" type="number" value="35000" min="0" step="500" />
-            <span>MXN · rango típico $25,000–$50,000 por daños materiales/atención (<a href="https://www.rastreator.mx/seguros-de-auto/articulos-destacados/cuanto-cuesta-un-accidente-vial-en-mexico" target="_blank" rel="noopener">Rastreator/IMCO</a>), ajustable</span>
-          </div>
-          <div class="impact-cost">
-            <label for="accidentRate">Incidencia base sin mitigar</label>
-            <input id="accidentRate" type="number" value="2.5" min="0" step="0.1" />
-            <span>accidentes / 1,000 h de reparto · estimación ilustrativa (no hay tasa oficial pública para repartidores), ajustable</span>
-          </div>
-        </div>
-        <div class="impact-grid">
-          <div class="impact-row impact-header">
-            <span></span>
-            <span class="impact-col-label greedy">Greedy</span>
-            <span class="impact-col-label smart">Risk-averse</span>
-          </div>
-          <div class="impact-row">
-            <span class="impact-label">Riesgo promedio aceptado (Re)</span>
-            <span class="impact-val greedy" id="impactRiskGreedy">—</span>
-            <span class="impact-val smart" id="impactRiskSmart">—</span>
-          </div>
-          <div class="impact-row">
-            <span class="impact-label">Pedidos de alto riesgo aceptados</span>
-            <span class="impact-val greedy" id="impactRiskyGreedy">—</span>
-            <span class="impact-val smart" id="impactRiskySmart">—</span>
-          </div>
-          <div class="impact-row">
-            <span class="impact-label">Rechazos por límite de seguridad</span>
-            <span class="impact-val greedy" id="impactSafetyGreedy">—</span>
-            <span class="impact-val smart" id="impactSafetySmart">—</span>
-          </div>
-          <div class="impact-row impact-row-divider">
-            <span class="impact-label">Ganancia bruta por hora trabajada</span>
-            <span class="impact-val greedy" id="impactEarnHourGreedy">—</span>
-            <span class="impact-val smart" id="impactEarnHourSmart">—</span>
-          </div>
-          <div class="impact-row">
-            <span class="impact-label">Costo esperado por accidentes, por hora</span>
-            <span class="impact-val greedy" id="impactSavingsHourGreedy">—</span>
-            <span class="impact-val smart" id="impactSavingsHourSmart">—</span>
-          </div>
-        </div>
-        <div class="impact-summary" id="impactSummary">Corre un turno para ver el impacto en vivo.</div>
-      </div>
-    </div>
-
     <div class="layout">
       <aside id="configPanel">
         <div class="config-header">
-          <h3>Configuración</h3>
+          <h3>Configuracion</h3>
           <button class="config-toggle" id="configToggle" type="button" aria-expanded="true"
-            title="Mostrar/ocultar parámetros">
+            title="Mostrar/ocultar parametros">
             <span class="chevron">▾</span>
           </button>
         </div>
@@ -149,7 +94,7 @@
             <div>
               <label>Turno (horas)</label>
               <input id="durationHours" type="number" value="1" min="0.1" step="0.25" />
-              <span class="field-hint" id="durationRealHint">≈ 45 s reales a 80x</span>
+              <span class="field-hint" id="durationRealHint">= 45 s reales a 80x</span>
             </div>
             <div>
               <label>Tick (s)</label>
@@ -170,19 +115,19 @@
           <button id="stop" disabled>Detener</button>
         </div>
 
-        <h3 style="margin-top:22px">Evento sorpresa</h3>
+        <h3 style="margin-top:var(--space-4)">Evento sorpresa</h3>
         <label>Severidad <b id="sevLabel">0.80</b></label>
         <input id="severity" type="range" min="0" max="1" step="0.05" value="0.8" />
         <div class="events">
-          <button data-event="HEAVY_RAIN">🌧️ Lluvia</button>
-          <button data-event="FLASH_FLOOD">🌊 Inundación</button>
-          <button data-event="HEAVY_TRAFFIC">🚗 Tráfico</button>
-          <button data-event="EXTREME_HEAT">🔥 Calor</button>
-          <button data-event="CLEAR">☀️ Despejado</button>
+          <button data-event="HEAVY_RAIN">Lluvia</button>
+          <button data-event="FLASH_FLOOD">Inundacion</button>
+          <button data-event="HEAVY_TRAFFIC">Trafico</button>
+          <button data-event="EXTREME_HEAT">Calor</button>
+          <button data-event="CLEAR">Despejado</button>
         </div>
-        <p id="envLine" style="margin-top:12px;font-size:12px;color:var(--muted)">Clima: CLEAR</p>
+        <p id="envLine" style="margin-top:var(--space-3);font-size:12px;color:var(--muted)">Clima: CLEAR</p>
         <p id="sessionLine"
-          style="margin:8px 0 0;font-size:11px;color:var(--muted);font-family:'IBM Plex Mono',monospace"></p>
+          style="margin:var(--space-2) 0 0;font-size:11px;color:var(--muted);font-family:'IBM Plex Mono',monospace"></p>
       </aside>
 
       <div class="map-wrap">
@@ -198,21 +143,76 @@
           <div><span style="background:#f0a43c"></span>Pickup</div>
           <div><span style="background:#7a63d8"></span>Dropoff</div>
           <div><span style="background:#d45d5d;opacity:.45"></span>Zona inundable</div>
-          <div><span style="background:#c77dff;opacity:.45"></span>Cruce con más accidentes</div>
+          <div><span style="background:#c77dff;opacity:.45"></span>Cruce con mas accidentes</div>
         </div>
       </div>
 
       <div class="feed">
         <h3>Decisiones recientes</h3>
-        <div id="log" class="log">Aún no hay decisiones.</div>
-        <h3 style="margin-top:18px">Ganancia (MXN)</h3>
+        <div id="log" class="log">Aun no hay decisiones.</div>
+
+        <h3 style="margin-top:var(--space-4)">Ganancia (MXN)</h3>
         <canvas id="chart" width="600" height="144"></canvas>
+
+        <div class="impact-section" id="impact">
+          <button class="impact-toggle" id="impactToggle" type="button" aria-expanded="false">
+            <span class="chevron">▾</span> Impacto de seguridad
+            <span class="impact-toggle-hint" id="impactToggleHint">— corre un turno para verlo</span>
+          </button>
+          <div class="impact-body" id="impactBody">
+            <div class="impact-head">
+              <div class="impact-cost">
+                <label for="incidentCost">Costo promedio por incidente vial</label>
+                <input id="incidentCost" type="number" value="35000" min="0" step="500" />
+                <span>MXN · rango tipico $25,000-$50,000 (<a href="https://www.rastreator.mx/seguros-de-auto/articulos-destacados/cuanto-cuesta-un-accidente-vial-en-mexico" target="_blank" rel="noopener">Rastreator/IMCO</a>), ajustable</span>
+              </div>
+              <div class="impact-cost">
+                <label for="accidentRate">Incidencia base sin mitigar</label>
+                <input id="accidentRate" type="number" value="2.5" min="0" step="0.1" />
+                <span>accidentes / 1,000 h de reparto · estimacion ilustrativa, ajustable</span>
+              </div>
+            </div>
+            <div class="impact-grid">
+              <div class="impact-row impact-header">
+                <span></span>
+                <span class="impact-col-label greedy">Greedy</span>
+                <span class="impact-col-label smart">Risk-averse</span>
+              </div>
+              <div class="impact-row">
+                <span class="impact-label">Riesgo promedio aceptado (Re)</span>
+                <span class="impact-val greedy" id="impactRiskGreedy">—</span>
+                <span class="impact-val smart" id="impactRiskSmart">—</span>
+              </div>
+              <div class="impact-row">
+                <span class="impact-label">Pedidos de alto riesgo aceptados</span>
+                <span class="impact-val greedy" id="impactRiskyGreedy">—</span>
+                <span class="impact-val smart" id="impactRiskySmart">—</span>
+              </div>
+              <div class="impact-row">
+                <span class="impact-label">Rechazos por limite de seguridad</span>
+                <span class="impact-val greedy" id="impactSafetyGreedy">—</span>
+                <span class="impact-val smart" id="impactSafetySmart">—</span>
+              </div>
+              <div class="impact-row impact-row-divider">
+                <span class="impact-label">Ganancia bruta por hora trabajada</span>
+                <span class="impact-val greedy" id="impactEarnHourGreedy">—</span>
+                <span class="impact-val smart" id="impactEarnHourSmart">—</span>
+              </div>
+              <div class="impact-row">
+                <span class="impact-label">Costo esperado por accidentes, por hora</span>
+                <span class="impact-val greedy" id="impactSavingsHourGreedy">—</span>
+                <span class="impact-val smart" id="impactSavingsHourSmart">—</span>
+              </div>
+            </div>
+            <div class="impact-summary" id="impactSummary">Corre un turno para ver el impacto en vivo.</div>
+          </div>
+        </div>
       </div>
     </div>
 
     <div class="agents">
       <section class="agent greedy">
-        <h2>Agente base · greedy_base (α = 0)</h2>
+        <h2>Agente base · greedy_base (a = 0)</h2>
         <div class="kpis" id="kpis-greedy"></div>
         <div class="current" id="cur-greedy">Sin pedido en curso</div>
       </section>
