@@ -65,7 +65,7 @@
     }
 
     .race-row.greedy .race-fill {
-      background: linear-gradient(90deg, #b5661f, var(--greedy));
+      background: linear-gradient(90deg, #a8302a, var(--greedy));
     }
 
     .race-row.smart .race-fill {

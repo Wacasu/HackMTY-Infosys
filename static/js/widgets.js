@@ -220,7 +220,7 @@
       const h = canvas.height;
       ctx.clearRect(0, 0, w, h);
       const series = [
-        { data: state.history.greedy, color: "#e08a3c" },
+        { data: state.history.greedy, color: "#e0524a" },
         { data: state.history.smart, color: "#3db8a0" },
       ];
       const all = series.flatMap((s) => s.data);

@@ -138,7 +138,7 @@
     }
 
     .driver-marker.greedy {
-      background: #e08a3c;
+      background: #e0524a;
       animation: greedy-pulse 1.4s ease-in-out infinite alternate;
     }
 
@@ -161,7 +161,7 @@
 
       to {
         transform: scale(1.14);
-        box-shadow: 0 0 0 8px rgba(224, 138, 60, 0.24), 0 2px 12px rgba(0, 0, 0, 0.7);
+        box-shadow: 0 0 0 8px rgba(224, 82, 74, 0.24), 0 2px 12px rgba(0, 0, 0, 0.7);
       }
     }
 

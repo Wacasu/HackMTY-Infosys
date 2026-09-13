@@ -101,7 +101,7 @@
     function drawCurrentRoutes() {
       state.layers.routes.forEach((l) => map.removeLayer(l));
       state.layers.routes = [];
-      [["greedy", "#e08a3c"], ["smart", "#3db8a0"]].forEach(([key, color]) => {
+      [["greedy", "#e0524a"], ["smart", "#3db8a0"]].forEach(([key, color]) => {
         const route = state.agents[key].remainingRoute || state.agents[key].route || [];
         if (!route.length) return;
         const line = L.polyline(route.map((point) => [point.lat, point.lon]), {
