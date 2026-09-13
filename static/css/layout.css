@@ -1,0 +1,367 @@
+    .layout {
+      display: grid;
+      grid-template-columns: 280px minmax(0, 1fr) 320px;
+      min-height: 0;
+      flex: 1 1 auto;
+    }
+
+    /* Los parámetros de arranque (semilla, pedidos, turno…) solo importan
+       antes de darle a "Iniciar turno" -- una vez corriendo el turno, solo
+       estorban altura que le vendría bien al feed de eventos. Colapsable
+       igual que el panel de impacto, con su propia preferencia recordada. */
+    .config-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+    }
+
+    .config-header h3 {
+      margin: 0;
+    }
+
+    .config-toggle {
+      background: none;
+      border: none;
+      padding: 2px 4px;
+      margin: 0;
+      color: var(--muted);
+      cursor: pointer;
+      line-height: 1;
+    }
+
+    .config-toggle:hover {
+      color: var(--smart);
+    }
+
+    .config-toggle .chevron {
+      display: inline-block;
+      transition: transform 200ms ease;
+    }
+
+    #configPanel.config-collapsed .config-toggle .chevron {
+      transform: rotate(-90deg);
+    }
+
+    .config-body {
+      overflow: hidden;
+      max-height: 320px;
+      opacity: 1;
+      margin-top: 10px;
+      transition: max-height 280ms ease, opacity 200ms ease, margin-top 280ms ease;
+    }
+
+    #configPanel.config-collapsed .config-body {
+      max-height: 0;
+      opacity: 0;
+      margin-top: 0;
+    }
+
+    aside,
+    .feed {
+      position: relative;
+      z-index: 2;
+      border-right: 1px solid var(--stroke);
+      overflow: auto;
+      padding: 14px;
+      background: var(--bg-2);
+    }
+
+    .feed {
+      border-right: 0;
+      border-left: 1px solid var(--stroke);
+    }
+
+    .map-wrap {
+      position: relative;
+      z-index: 0;
+      min-height: 0;
+      min-width: 0;
+      overflow: hidden;
+    }
+
+    #map {
+      height: 100%;
+      min-height: 320px;
+      background: #cfd6de;
+    }
+
+    label {
+      display: block;
+      font-size: 11px;
+      color: var(--muted);
+      margin: 10px 0 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    input[type="number"],
+    input[type="range"] {
+      width: 100%;
+    }
+
+    input[type="number"] {
+      background: var(--bg);
+      border: 1px solid var(--stroke);
+      color: var(--text);
+      padding: 7px 8px;
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 12px;
+      border-radius: var(--radius-sm);
+    }
+
+    /* Traducción en vivo de un campo a otra unidad más útil para leer de
+       un vistazo (p. ej. horas de turno -> segundos reales que tarda en
+       reproducirse a la velocidad actual), sin ocupar el espacio de otro
+       campo del formulario. */
+    .field-hint {
+      display: block;
+      margin-top: 4px;
+      font-size: 10px;
+      color: var(--muted);
+      font-family: "IBM Plex Mono", monospace;
+    }
+
+    .row-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 14px;
+    }
+
+    button {
+      border: 1px solid var(--stroke);
+      background: var(--bg-3);
+      color: var(--text);
+      padding: 8px 10px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 500;
+      border-radius: var(--radius-sm);
+      transition: transform 120ms ease, background 150ms ease, border-color 150ms ease;
+    }
+
+    button:hover:not(:disabled) {
+      border-color: #3a4658;
+      background: var(--bg-4);
+    }
+
+    button:active:not(:disabled) {
+      transform: scale(0.96);
+    }
+
+    button.primary {
+      background: linear-gradient(180deg, #2c3c58, #20304a);
+      border-color: #35506c;
+    }
+
+    button.primary:hover:not(:disabled) {
+      background: linear-gradient(180deg, #33445f, #263752);
+    }
+
+    button:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .events {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+      margin-top: 8px;
+    }
+
+    .events button {
+      font-size: 11px;
+    }
+
+    .legend {
+      position: absolute;
+      z-index: 500;
+      left: 12px;
+      bottom: 12px;
+      background: rgba(14, 17, 22, 0.88);
+      border: 1px solid var(--stroke);
+      padding: 8px 10px;
+      font-size: 11px;
+      color: var(--muted);
+      border-radius: var(--radius-sm);
+    }
+
+    .legend span {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      margin-right: 6px;
+      vertical-align: middle;
+      border-radius: 3px;
+    }
+
+    .agents {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      border-top: 1px solid var(--stroke);
+      flex: 0 0 auto;
+    }
+
+    .agent {
+      padding: 12px 16px;
+      min-height: 168px;
+    }
+
+    .agent.greedy {
+      border-right: 1px solid var(--stroke);
+    }
+
+    .agent h2 {
+      margin: 0 0 8px;
+      font-size: 13px;
+    }
+
+    .agent.greedy h2 {
+      color: var(--greedy);
+    }
+
+    .agent.smart h2 {
+      color: var(--smart);
+    }
+
+    .kpis {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 8px;
+    }
+
+    .kpi {
+      background: var(--bg-2);
+      border: 1px solid var(--stroke);
+      padding: 8px;
+      border-radius: var(--radius-sm);
+    }
+
+    .kpi.flash {
+      animation: kpi-flash 550ms ease;
+    }
+
+    @keyframes kpi-flash {
+      0% {
+        background: var(--bg-2);
+      }
+
+      30% {
+        background: var(--bg-4);
+        transform: translateY(-1px);
+      }
+
+      100% {
+        background: var(--bg-2);
+      }
+    }
+
+    .kpi b {
+      display: block;
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 16px;
+      font-weight: 600;
+    }
+
+    .kpi span {
+      font-size: 10px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .current {
+      margin-top: 8px;
+      font-size: 12px;
+      color: var(--muted);
+      min-height: 18px;
+    }
+
+    canvas {
+      width: 100%;
+      height: 72px;
+      display: block;
+      margin-top: 10px;
+      background: var(--bg);
+      border: 1px solid var(--stroke);
+      border-radius: var(--radius-sm);
+    }
+
+    h3 {
+      margin: 0 0 8px;
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    /* Modo presentación: oculta configuración y feed, deja solo el mapa,
+       la barra de carrera y el resumen de agentes — pensado para exponer
+       ante un jurado sin ruido visual. */
+    .app.present aside,
+    .app.present .feed {
+      display: none;
+    }
+
+    .app.present .layout {
+      grid-template-columns: 1fr;
+    }
+
+    @media (max-width: 1100px) {
+
+      /* Bajo este ancho dejamos de forzar todo dentro de un viewport fijo
+         con scroll interno por panel: eso aplasta `.layout` (mapa +
+         configuración + feed) contra `.agents`, que siempre reserva su
+         alto natural. En vez de eso, la página entera crece y hace scroll
+         normal, como cualquier sitio responsive. */
+      html,
+      body {
+        height: auto;
+      }
+
+      .app {
+        height: auto;
+        min-height: 100%;
+      }
+
+      .layout {
+        grid-template-columns: 1fr;
+        min-height: 0;
+        overflow: visible;
+      }
+
+      aside,
+      .feed {
+        border: 0;
+        border-bottom: 1px solid var(--stroke);
+        overflow: visible;
+        max-height: none;
+      }
+
+      .map-wrap {
+        height: 60vh;
+        min-height: 320px;
+      }
+
+      .agents {
+        grid-template-columns: 1fr;
+      }
+
+      .agent.greedy {
+        border-right: 0;
+        border-bottom: 1px solid var(--stroke);
+      }
+
+      .race-row {
+        grid-template-columns: 120px 1fr 78px;
+      }
+    }

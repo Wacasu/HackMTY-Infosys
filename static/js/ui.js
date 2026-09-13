@@ -6,8 +6,8 @@ function setStatus(text, kind) {
     statusEl.className = "status-pill" + (kind ? " " + kind : "");
 }
 
-function kpi(value, label) {
-    return `<div class="kpi"><b>${value}</b><span>${label}</span></div>`;
+function kpi(value, label, cls) {
+    return `<div class="kpi${cls ? " " + cls : ""}"><b>${value}</b><span>${label}</span></div>`;
 }
 
 function renderKpis() {
@@ -18,13 +18,21 @@ function renderKpis() {
             kpi(a.completed, "Completados"),
             kpi(a.rejected, "Rechazados"),
             kpi(a.timeouts, "Timeouts 2s"),
+            kpi(a.highRiskAccepted, "Pedidos riesgo alto", "high-risk"),
+            kpi(
+                a.highRiskAccepted > 0
+                    ? a.avgRiskOfAccepted.toFixed(2)
+                    : "—",
+                "Riesgo promedio",
+                "high-risk",
+            ),
         ].join("");
         const cur = a.current;
         document.getElementById("cur-" + key).textContent = cur
             ? `Entregando #${cur.order_id} · $${cur.base_fare_mxn} · ${cur.straight_line_distance_km} km`
             : a.active
-              ? `${a.active} pedidos en cola`
-              : "Sin pedido en curso";
+                ? `${a.active} pedidos en cola`
+                : "Sin pedido en curso";
     });
 }
 

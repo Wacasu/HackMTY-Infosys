@@ -1,0 +1,120 @@
+    .event-banner {
+      flex: 0 0 auto;
+      max-height: 0;
+      opacity: 0;
+      overflow: hidden;
+      transform: translateY(-6px);
+      transition: max-height 260ms ease, opacity 220ms ease, transform 260ms ease, padding 260ms ease;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font: 600 12px "IBM Plex Mono", monospace;
+      border-bottom: 0 solid transparent;
+      padding: 0 18px;
+    }
+
+    .event-banner.visible {
+      max-height: 44px;
+      opacity: 1;
+      transform: translateY(0);
+      padding: 10px 18px;
+      border-bottom-width: 1px;
+    }
+
+    .event-icon {
+      font-size: 15px;
+    }
+
+    .event-banner.rain {
+      background: linear-gradient(90deg, rgba(79, 141, 253, .18), rgba(79, 141, 253, .04));
+      color: #a9c8ff;
+      border-color: #2c4a7c;
+    }
+
+    .event-banner.flood {
+      background: linear-gradient(90deg, rgba(46, 197, 211, .18), rgba(46, 197, 211, .04));
+      color: #a4e8ee;
+      border-color: #1f5c63;
+    }
+
+    .event-banner.traffic {
+      background: linear-gradient(90deg, rgba(224, 168, 60, .18), rgba(224, 168, 60, .04));
+      color: #f0cf8e;
+      border-color: #5c4a1f;
+    }
+
+    .event-banner.heat {
+      background: linear-gradient(90deg, rgba(224, 98, 60, .2), rgba(224, 98, 60, .04));
+      color: #f0b092;
+      border-color: #5c2f1f;
+    }
+
+    .event-banner.clear {
+      background: linear-gradient(90deg, rgba(88, 214, 141, .18), rgba(88, 214, 141, .04));
+      color: #b7ecc9;
+      border-color: #285c3a;
+    }
+
+    .weather-overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 450;
+      pointer-events: none;
+      opacity: 0;
+      overflow: hidden;
+      transition: opacity 300ms ease;
+    }
+
+    .weather-overlay.rain {
+      background: linear-gradient(rgba(33, 64, 92, 0.08), rgba(14, 22, 35, 0.24));
+    }
+
+    .weather-overlay.rain::before,
+    .weather-overlay.rain::after {
+      content: "";
+      position: absolute;
+      inset: -30%;
+      background-image: repeating-linear-gradient(105deg, transparent 0 22px, rgba(196, 225, 255, 0.56) 23px, transparent 25px 44px);
+      background-size: 90px 90px;
+      animation: rain-fall 0.55s linear infinite;
+    }
+
+    .weather-overlay.rain::after {
+      opacity: 0.34;
+      background-size: 150px 150px;
+      animation-duration: 0.9s;
+      animation-direction: reverse;
+    }
+
+    .weather-overlay.flood {
+      background: radial-gradient(circle at 48% 63%, rgba(33, 158, 194, 0.28), transparent 42%);
+    }
+
+    .weather-overlay.traffic {
+      background: repeating-linear-gradient(90deg, transparent 0 80px, rgba(239, 166, 63, 0.08) 82px 86px);
+    }
+
+    .weather-overlay.heat {
+      background: rgba(239, 119, 49, 0.12);
+      animation: heat-shimmer 1.4s ease-in-out infinite alternate;
+    }
+
+    @keyframes rain-fall {
+      from {
+        transform: translate3d(-20px, -40px, 0);
+      }
+
+      to {
+        transform: translate3d(70px, 100px, 0);
+      }
+    }
+
+    @keyframes heat-shimmer {
+      from {
+        filter: saturate(1);
+      }
+
+      to {
+        filter: saturate(1.45) brightness(1.08);
+      }
+    }

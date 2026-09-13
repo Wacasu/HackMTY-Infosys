@@ -168,6 +168,8 @@ function applyTick(msg) {
     }
     agent.incidents = msg.incident_stats?.incidents_exposed || 0;
     agent.zonesCrossed = msg.incident_stats?.zones_crossed || [];
+    agent.highRiskAccepted = msg.high_risk_stats?.high_risk_accepted || 0;
+    agent.avgRiskOfAccepted = msg.high_risk_stats?.avg_risk_of_accepted || 0;
     agent.elapsed = shift.elapsed_sec || 0;
     agent.duration = shift.shift_duration_sec || 1;
     agent.events = shift.active_events || ["CLEAR"];

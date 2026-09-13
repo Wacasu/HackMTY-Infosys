@@ -1,0 +1,98 @@
+    .log {
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 11px;
+      line-height: 1.45;
+      color: var(--muted);
+    }
+
+    .log>div {
+      animation: log-in 220ms ease;
+      padding: 2px 0;
+    }
+
+    @keyframes log-in {
+      from {
+        opacity: 0;
+        transform: translateY(-4px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .log .accept {
+      color: var(--ok);
+    }
+
+    .log .reject {
+      color: var(--danger);
+    }
+
+    .log .timeout {
+      color: var(--warn);
+    }
+
+    .log .event {
+      color: #f4cf8a;
+      border-left: 2px solid var(--warn);
+      padding-left: 6px;
+    }
+
+    .log .latency {
+      display: inline-block;
+      font-size: 10px;
+      padding: 1px 5px;
+      border-radius: 999px;
+      background: var(--bg-3);
+      border: 1px solid var(--stroke);
+      color: var(--ok);
+      margin: 0 2px;
+    }
+
+    .log .latency.reject {
+      color: var(--warn);
+      border-color: #5c4a1f;
+    }
+
+    .log .latency.timeout {
+      color: var(--danger);
+      border-color: #4a2a2a;
+    }
+
+    /* Recogida/entrega: su propia línea (no una decisión de aceptar/
+       rechazar), con un borde del color del agente para que salte a la
+       vista dentro del feed sin tener que leer el texto completo. */
+    .log .pickup,
+    .log .delivered {
+      display: block;
+      border-left: 2px solid var(--agent-color, var(--muted));
+      padding-left: 6px;
+      font-weight: 600;
+    }
+
+    .log .pickup.greedy,
+    .log .delivered.greedy {
+      --agent-color: var(--greedy);
+      color: var(--greedy);
+    }
+
+    .log .pickup.smart,
+    .log .delivered.smart {
+      --agent-color: var(--smart);
+      color: var(--smart);
+    }
+
+    .log .delivered .fare {
+      color: var(--text);
+      font-weight: 400;
+    }
+
+    /* Entregado fuera de su ventana de tiempo: se aceptó a tiempo, pero
+       para cuando le tocó turno en la cola ya había vencido -- se marca
+       distinto en vez de verse idéntico a una entrega puntual. */
+    .log .delivered.late {
+      --agent-color: var(--warn);
+      color: var(--warn);
+    }

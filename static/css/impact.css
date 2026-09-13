@@ -1,0 +1,174 @@
+    .impact {
+      flex: 0 0 auto;
+      padding: 10px 18px;
+      background: var(--bg-2);
+      border-bottom: 1px solid var(--stroke);
+    }
+
+    /* Colapsado por defecto: es el bloque más alto de la página y, abierto
+       todo el tiempo, deja muy poco alto para el mapa. Un clic en el
+       título lo despliega para el momento del pitch de seguridad, y otro
+       clic lo vuelve a guardar. */
+    .impact-toggle {
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+      width: 100%;
+      background: none;
+      border: none;
+      padding: 2px 0;
+      margin: 0;
+      color: var(--text);
+      font-size: 12.5px;
+      font-weight: 700;
+      font-family: inherit;
+      cursor: pointer;
+      text-align: left;
+    }
+
+    .impact-toggle:hover {
+      color: var(--smart);
+    }
+
+    .impact-toggle .chevron {
+      display: inline-block;
+      transition: transform 200ms ease;
+      color: var(--muted);
+    }
+
+    .impact.collapsed .impact-toggle .chevron {
+      transform: rotate(-90deg);
+    }
+
+    .impact-toggle-hint {
+      font-weight: 400;
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .impact-body {
+      overflow: hidden;
+      max-height: 400px;
+      opacity: 1;
+      margin-top: 10px;
+      transition: max-height 280ms ease, opacity 200ms ease, margin-top 280ms ease;
+    }
+
+    .impact.collapsed .impact-body {
+      max-height: 0;
+      opacity: 0;
+      margin-top: 0;
+    }
+
+    .impact-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+
+    .impact-cost {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 10.5px;
+      color: var(--muted);
+    }
+
+    .impact-cost label {
+      margin: 0;
+      text-transform: none;
+      letter-spacing: 0;
+      font-size: 10.5px;
+    }
+
+    .impact-cost input {
+      width: 90px;
+      background: var(--bg);
+      border: 1px solid var(--stroke);
+      color: var(--text);
+      padding: 4px 6px;
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 11px;
+      border-radius: var(--radius-sm);
+    }
+
+    .impact-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .impact-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 96px 96px;
+      align-items: center;
+      gap: 8px;
+      padding: 5px 8px;
+      border-radius: var(--radius-sm);
+      background: var(--bg-3);
+    }
+
+    .impact-row.impact-header {
+      background: transparent;
+      padding: 0 8px;
+    }
+
+    /* Separa visualmente las filas de "conteos" (riesgo aceptado, pedidos
+       de alto riesgo…) de las de "tarifa por hora" que vienen después --
+       son dos tipos de métrica distintos, no una continuación de la misma
+       tabla. */
+    .impact-row-divider {
+      margin-top: 6px;
+      border-top: 1px dashed var(--stroke);
+      padding-top: 9px;
+    }
+
+    .impact-col-label {
+      font-size: 10px;
+      text-align: right;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .impact-col-label.greedy {
+      color: var(--greedy);
+    }
+
+    .impact-col-label.smart {
+      color: var(--smart);
+    }
+
+    .impact-label {
+      font-size: 11.5px;
+      color: var(--muted);
+    }
+
+    .impact-val {
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 13px;
+      font-weight: 700;
+      text-align: right;
+    }
+
+    .impact-val.greedy {
+      color: var(--greedy);
+    }
+
+    .impact-val.smart {
+      color: var(--smart);
+    }
+
+    .impact-summary {
+      margin-top: 10px;
+      padding: 8px 10px;
+      background: var(--smart-soft);
+      border: 1px solid #1f5c63;
+      border-radius: var(--radius-sm);
+      font-size: 12px;
+      color: #b7ecc9;
+      line-height: 1.5;
+    }

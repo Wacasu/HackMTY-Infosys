@@ -1,0 +1,229 @@
+    :root {
+      --bg: #0b0e14;
+      --bg-2: #131824;
+      --bg-3: #1a2130;
+      --bg-4: #212a3c;
+      --stroke: #262e3f;
+      --text: #eef2f8;
+      --muted: #8b97ab;
+      --muted-2: #647089;
+      --greedy: #f0954a;
+      --greedy-soft: rgba(240, 149, 74, .16);
+      --smart: #35c4a6;
+      --smart-soft: rgba(53, 196, 166, .16);
+      --danger: #ef6969;
+      --ok: #58d68d;
+      --warn: #f0c05a;
+      --radius: 10px;
+      --radius-sm: 7px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      margin: 0;
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "IBM Plex Sans", sans-serif;
+    }
+
+    body {
+      background: radial-gradient(1200px 800px at 18% -12%, #161d2c 0%, var(--bg) 55%);
+    }
+
+    button,
+    input {
+      font-family: inherit;
+    }
+
+    .app {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 12px 18px;
+      border-bottom: 1px solid var(--stroke);
+      background: var(--bg-2);
+      flex: 0 0 auto;
+      flex-wrap: wrap;
+    }
+
+    header .brand {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+    }
+
+    header h1 {
+      margin: 0;
+      font-size: 17px;
+      font-weight: 700;
+      letter-spacing: 0.01em;
+    }
+
+    header p {
+      margin: 2px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    header .right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-left: auto;
+    }
+
+    .ghost-btn {
+      border: 1px solid var(--stroke);
+      background: var(--bg-3);
+      color: var(--text);
+      padding: 7px 12px;
+      border-radius: 999px;
+      cursor: pointer;
+      font-size: 11.5px;
+      font-weight: 600;
+      transition: transform 120ms ease, background 150ms ease, border-color 150ms ease;
+    }
+
+    .ghost-btn:hover {
+      border-color: #3a4658;
+      background: var(--bg-4);
+    }
+
+    .ghost-btn:active {
+      transform: scale(0.96);
+    }
+
+    .ghost-btn.active {
+      color: var(--ok);
+      border-color: #2e4a36;
+      background: rgba(88, 214, 141, .1);
+    }
+
+    .status-pill {
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 11px;
+      padding: 6px 10px;
+      border: 1px solid var(--stroke);
+      background: var(--bg-3);
+      color: var(--muted);
+      border-radius: var(--radius-sm);
+      display: flex;
+      align-items: center;
+    }
+
+    .status-pill.running::before {
+      content: "";
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--ok);
+      margin-right: 7px;
+      animation: blink 1.2s ease-in-out infinite;
+    }
+
+    @keyframes blink {
+
+      0%,
+      100% {
+        opacity: 1;
+      }
+
+      50% {
+        opacity: .25;
+      }
+    }
+
+    .status-pill.running {
+      color: var(--ok);
+      border-color: #2e4a36;
+    }
+
+    .status-pill.loading {
+      color: var(--warn);
+      border-color: #4a3f24;
+    }
+
+    .status-pill.error {
+      color: var(--danger);
+      border-color: #4a2a2a;
+    }
+
+    .sim-clock {
+      color: var(--text);
+      font: 600 13px "IBM Plex Mono", monospace;
+      text-align: right;
+    }
+
+    .sim-clock span {
+      display: block;
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 400;
+    }
+
+    .progress-track {
+      flex: 0 0 auto;
+      height: 3px;
+      background: var(--bg-3);
+    }
+
+    .progress-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, var(--smart), var(--greedy));
+      transition: width 400ms linear;
+    }
+
+    .explainer {
+      flex: 0 0 auto;
+      padding: 8px 18px;
+      background: var(--bg-2);
+      border-bottom: 1px solid var(--stroke);
+      font-size: 11.5px;
+      color: var(--muted);
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+      line-height: 1.6;
+    }
+
+    .explainer .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 9px;
+      border-radius: 999px;
+      font-weight: 700;
+      font-size: 11px;
+      white-space: nowrap;
+    }
+
+    .explainer .chip.greedy {
+      background: var(--greedy-soft);
+      color: var(--greedy);
+    }
+
+    .explainer .chip.smart {
+      background: var(--smart-soft);
+      color: var(--smart);
+    }
+
+    .explainer .sep {
+      color: var(--stroke);
+      padding: 0 2px;
+    }
