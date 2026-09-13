@@ -240,12 +240,12 @@ class RiskAverseAgent(BaseAgent):
         exceeds_safety_threshold = weighted_risk >= SAFETY_HARD_RISK_LIMIT
 
         reasoning = (
-            f"Aceptado (aceptación obligatoria): Te({te_minutes:.1f} min) + "
+            f"Accepted (mandatory acceptance): Te({te_minutes:.1f} min) + "
             f"alpha({self.alpha:.2f}) * Re({weighted_risk:.2f}) = "
-            f"{weighted_cost_minutes:.1f} min-equiv; densidad de valor "
-            f"{value_density_score:.2f} pts/min-equiv -- bonus de riesgo "
-            f"estimado {estimated_bonus:.1f} pts"
-            + (" (ruta de alto riesgo)." if exceeds_safety_threshold else ".")
+            f"{weighted_cost_minutes:.1f} min-equiv; value density "
+            f"{value_density_score:.2f} pts/min-equiv -- estimated risk bonus "
+            f"{estimated_bonus:.1f} pts"
+            + (" (high-risk route)." if exceeds_safety_threshold else ".")
         )
 
         return AgentDecision(

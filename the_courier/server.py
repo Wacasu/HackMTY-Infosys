@@ -376,10 +376,10 @@ class ShiftSimulatorEngine:
                 score=0.0,
                 estimated_travel_time_sec=0.0,
                 reasoning=(
-                    f"Aceptado (aceptación obligatoria): el cálculo de "
-                    f"riesgo/puntos no terminó en {self._config.decision_timeout_ms} ms; "
-                    "se acepta de todos modos y se recalculará el riesgo real "
-                    "al momento de rutear."
+                    f"Accepted (mandatory acceptance): the risk/points computation "
+                    f"did not finish within {self._config.decision_timeout_ms} ms; "
+                    "the order is queued anyway and the real risk is recomputed "
+                    "when the route is planned."
                 ),
                 timed_out=True,
                 decision_latency_ms=float(self._config.decision_timeout_ms),

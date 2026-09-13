@@ -54,9 +54,12 @@
       --rail-r: 380px;
     }
 
-    * { box-sizing: border-box; }
+    * {
+      box-sizing: border-box;
+    }
 
-    html, body {
+    html,
+    body {
       height: 100%;
       margin: 0;
       overflow: hidden;
@@ -73,18 +76,32 @@
       -webkit-font-smoothing: antialiased;
     }
 
-    ::selection { background: var(--accent); color: #fff; }
+    ::selection {
+      background: var(--accent);
+      color: #fff;
+    }
 
     /* Scrollbars discretas, del color del panel (Chrome/Edge) */
-    ::-webkit-scrollbar { width: 9px; height: 9px; }
-    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar {
+      width: 9px;
+      height: 9px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
     ::-webkit-scrollbar-thumb {
       background: #24314A;
       border-radius: 99px;
       border: 2px solid transparent;
       background-clip: content-box;
     }
-    ::-webkit-scrollbar-thumb:hover { background: #33456A; background-clip: content-box; }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: #33456A;
+      background-clip: content-box;
+    }
 
     /* ---------------- estructura general ---------------- */
     .app {
@@ -94,51 +111,143 @@
       gap: 0;
     }
 
-    /* ---------------- barra superior ---------------- */
+    /* ---------------- barra superior ----------------
+       Estructura tomada de la hoja para compartir de iOS: miniatura
+       cuadrada redondeada a la izquierda, titulo y subtitulo apilados
+       junto a ella, una pastilla de accion con chevron, y un boton
+       circular al extremo derecho. */
     .topbar {
       display: flex;
       align-items: center;
-      gap: 20px;
+      gap: 16px;
       padding: 0 18px;
-      height: 58px;
+      height: 68px;
       background: linear-gradient(180deg, #0E1523, #0B111C);
       border-bottom: 1px solid var(--line-soft);
     }
 
-    .brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 13px;
+      min-width: 0;
+    }
 
+    /* La miniatura del share sheet: cuadrado redondeado con arte propio. */
     .brand-mark {
-      width: 34px; height: 34px;
+      width: 46px;
+      height: 46px;
       flex: none;
-      border-radius: 10px;
+      border-radius: 13px;
       display: grid;
       place-items: center;
-      font-size: 17px;
-      background: linear-gradient(145deg, #1B2942, #121B2C);
-      border: 1px solid #2A3A58;
-      box-shadow: inset 0 1px 0 #ffffff12, 0 4px 14px #0008;
+      color: var(--smart);
+      background: linear-gradient(150deg, #1C2C46, #111A2B 60%);
+      border: 1px solid #2C3E5E;
+      box-shadow: inset 0 1px 0 #ffffff14, 0 6px 18px #0009;
+    }
+
+    .brand-mark svg {
+      width: 25px;
+      height: 25px;
+    }
+
+    .brand-text {
+      min-width: 0;
     }
 
     .brand h1 {
       margin: 0;
-      font-size: 15px;
+      font-size: 17px;
       font-weight: 700;
-      letter-spacing: -0.01em;
-      line-height: 1.1;
+      letter-spacing: -0.02em;
+      line-height: 1.2;
       white-space: nowrap;
     }
 
     .brand p {
-      margin: 2px 0 0;
-      font-size: 11px;
+      margin: 1px 0 0;
+      font-size: 12.5px;
       color: var(--txt-3);
-      line-height: 1.1;
+      line-height: 1.25;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
     }
 
-    .topbar-spacer { flex: 1 1 auto; }
+    .topbar-spacer {
+      flex: 1 1 auto;
+    }
+
+    /* Pastilla con chevron, equivalente al boton "Collaborate >". */
+    .header-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      height: 34px;
+      padding: 0 12px 0 11px;
+      border-radius: 99px;
+      background: #17212F;
+      border: 1px solid var(--line);
+      color: var(--txt-2);
+      font-family: inherit;
+      font-size: 12.5px;
+      font-weight: 600;
+      cursor: default;
+      white-space: nowrap;
+      transition: border-color .15s ease, color .15s ease;
+    }
+
+    .header-pill svg {
+      width: 15px;
+      height: 15px;
+      flex: none;
+    }
+
+    .header-pill .pill-chevron {
+      width: 11px;
+      height: 11px;
+      color: var(--txt-3);
+    }
+
+    .header-pill.ready {
+      color: var(--smart);
+      border-color: #1FD1B23D;
+      background: #1FD1B214;
+    }
+
+    /* Boton circular del extremo derecho, como la "X" de la referencia. */
+    .round-btn {
+      width: 34px;
+      height: 34px;
+      flex: none;
+      display: grid;
+      place-items: center;
+      border-radius: 99px;
+      background: #1A2434;
+      border: 1px solid var(--line);
+      color: var(--txt-2);
+      cursor: pointer;
+      padding: 0;
+      transition: all .15s ease;
+    }
+
+    .round-btn svg {
+      width: 17px;
+      height: 17px;
+    }
+
+    .round-btn:hover {
+      color: var(--txt);
+      background: #22304A;
+      border-color: #33456A;
+    }
+
+    .round-btn.active {
+      background: #1E2E4F;
+      border-color: var(--accent);
+      color: #C9D9FF;
+    }
 
     /* Reloj de turno: el dato que ancla toda la narrativa del demo */
     .sim-clock {
@@ -149,7 +258,7 @@
     }
 
     .sim-clock #simClock {
-      font-family: var(--mono);
+      font-family: var(--Segoe UI);
       font-size: 19px;
       font-weight: 600;
       letter-spacing: 0.02em;
@@ -190,12 +299,19 @@
     .status-pill.running::before {
       content: "";
       display: inline-block;
-      width: 6px; height: 6px;
+      width: 6px;
+      height: 6px;
       border-radius: 99px;
       background: var(--smart);
       margin-right: 7px;
       vertical-align: middle;
       animation: pulse-dot 1.4s ease-in-out infinite;
+    }
+
+    .status-pill.loading {
+      background: #17233C;
+      border-color: #5B8CFF3D;
+      color: #A8C0FF;
     }
 
     .status-pill.error {
@@ -205,8 +321,17 @@
     }
 
     @keyframes pulse-dot {
-      0%, 100% { opacity: 1; transform: scale(1); }
-      50% { opacity: .35; transform: scale(.8); }
+
+      0%,
+      100% {
+        opacity: 1;
+        transform: scale(1);
+      }
+
+      50% {
+        opacity: .35;
+        transform: scale(.8);
+      }
     }
 
     .ghost-btn {
@@ -223,8 +348,17 @@
       white-space: nowrap;
     }
 
-    .ghost-btn:hover { color: var(--txt); border-color: #33456A; background: #1B2739; }
-    .ghost-btn.active { background: #1E2E4F; border-color: var(--accent); color: #C9D9FF; }
+    .ghost-btn:hover {
+      color: var(--txt);
+      border-color: #33456A;
+      background: #1B2739;
+    }
+
+    .ghost-btn.active {
+      background: #1E2E4F;
+      border-color: var(--accent);
+      color: #C9D9FF;
+    }
 
     /* ---------------- progreso del turno ---------------- */
     .progress-track {
@@ -267,16 +401,32 @@
 
     .chip::before {
       content: "";
-      width: 7px; height: 7px;
+      width: 7px;
+      height: 7px;
       border-radius: 99px;
       background: currentColor;
     }
 
-    .chip.greedy { color: var(--greedy); background: #FF9D2E1A; border: 1px solid #FF9D2E33; }
-    .chip.smart { color: var(--smart); background: #1FD1B21A; border: 1px solid #1FD1B233; }
+    .chip.greedy {
+      color: var(--greedy);
+      background: #FF9D2E1A;
+      border: 1px solid #FF9D2E33;
+    }
 
-    .thesis .sep { color: var(--line); }
-    .thesis strong { color: var(--txt); font-weight: 600; }
+    .chip.smart {
+      color: var(--smart);
+      background: #1FD1B21A;
+      border: 1px solid #1FD1B233;
+    }
+
+    .thesis .sep {
+      color: var(--line);
+    }
+
+    .thesis strong {
+      color: var(--txt);
+      font-weight: 600;
+    }
 
     /* ---------------- barra de control ---------------- */
     .controlbar {
@@ -289,7 +439,11 @@
       border-bottom: 1px solid var(--line-soft);
     }
 
-    .cb-group { display: flex; align-items: center; gap: 8px; }
+    .cb-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
 
     .cb-label {
       font-size: 10px;
@@ -314,8 +468,14 @@
       transition: transform .12s ease, box-shadow .18s ease, filter .18s ease;
     }
 
-    button.primary:hover:not(:disabled) { filter: brightness(1.07); box-shadow: 0 6px 22px #1FD1B255, inset 0 1px 0 #ffffff45; }
-    button.primary:active:not(:disabled) { transform: translateY(1px); }
+    button.primary:hover:not(:disabled) {
+      filter: brightness(1.07);
+      box-shadow: 0 6px 22px #1FD1B255, inset 0 1px 0 #ffffff45;
+    }
+
+    button.primary:active:not(:disabled) {
+      transform: translateY(1px);
+    }
 
     .controlbar button:not(.primary):not(.icon-btn) {
       font-family: inherit;
@@ -336,11 +496,18 @@
       background: #1D283A;
     }
 
-    button:disabled { opacity: .38; cursor: not-allowed; }
+    button:disabled {
+      opacity: .38;
+      cursor: not-allowed;
+    }
 
     /* Botones de evento sorpresa: el momento estelar del demo, tienen
        que verse accionables y encontrarse sin buscar. */
-    .events { display: flex; gap: 6px; flex-wrap: wrap; }
+    .events {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
 
     .events button {
       font-family: inherit;
@@ -363,9 +530,15 @@
       transform: translateY(-1px);
     }
 
-    .events button:active { transform: translateY(0); }
+    .events button:active {
+      transform: translateY(0);
+    }
 
-    .cb-sev { display: flex; align-items: center; gap: 8px; }
+    .cb-sev {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
 
     input[type="range"] {
       -webkit-appearance: none;
@@ -380,7 +553,8 @@
 
     input[type="range"]::-webkit-slider-thumb {
       -webkit-appearance: none;
-      width: 15px; height: 15px;
+      width: 15px;
+      height: 15px;
       border-radius: 99px;
       background: #fff;
       border: 2px solid #0B111C;
@@ -389,7 +563,7 @@
     }
 
     .cb-sev b {
-      font-family: var(--mono);
+      font-family: var(--Segoe UI);
       font-size: 12px;
       color: var(--txt);
       font-variant-numeric: tabular-nums;
@@ -406,13 +580,16 @@
       min-width: 0;
     }
 
-    .cb-env p { margin: 0; line-height: 1.3; }
+    .cb-env p {
+      margin: 0;
+      line-height: 1.3;
+    }
 
     #envLine {
       font-size: 11.5px;
       font-weight: 600;
       color: var(--txt-2);
-      font-family: var(--mono);
+      font-family: var(--Segoe UI);
     }
 
     #realWeatherLine {
@@ -424,7 +601,7 @@
     #sessionLine {
       font-size: 9.5px;
       color: #46536B;
-      font-family: var(--mono);
+      font-family: var(--Segoe UI);
     }
 
     /* ---------------- panel de configuración ---------------- */
@@ -438,7 +615,11 @@
       flex-wrap: wrap;
     }
 
-    .config-header { display: flex; align-items: center; gap: 8px; }
+    .config-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
 
     .config-header h3 {
       margin: 0;
@@ -450,7 +631,8 @@
     }
 
     .icon-btn {
-      width: 22px; height: 22px;
+      width: 22px;
+      height: 22px;
       display: grid;
       place-items: center;
       border-radius: 6px;
@@ -463,16 +645,86 @@
       transition: all .15s ease;
     }
 
-    .icon-btn:hover { color: var(--txt); border-color: #33456A; }
+    .icon-btn:hover {
+      color: var(--txt);
+      border-color: #33456A;
+    }
 
-    .chevron { transition: transform .22s ease; display: block; line-height: 1; }
+    .chevron {
+      transition: transform .22s ease;
+      display: block;
+      line-height: 0;
+      color: var(--txt-3);
+    }
+
+    .chevron svg {
+      width: 12px;
+      height: 12px;
+      display: block;
+    }
+
     #configPanel.config-collapsed .chevron,
-    .impact.collapsed .chevron { transform: rotate(-90deg); }
+    .impact.collapsed .chevron {
+      transform: rotate(-90deg);
+    }
 
-    .config-body { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-    #configPanel.config-collapsed .config-body { display: none; }
+    /* ---------------- iconos de linea (sustituyen a los emojis) ----------------
+       Un solo juego de trazos, del grosor y radio de los simbolos de iOS,
+       para que los botones se lean como controles y no como decoracion. */
+    button.primary,
+    .events button,
+    .impact-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+    }
 
-    .field { display: flex; align-items: center; gap: 7px; }
+    button.primary svg {
+      width: 13px;
+      height: 13px;
+      flex: none;
+    }
+
+    .events button svg {
+      width: 15px;
+      height: 15px;
+      flex: none;
+    }
+
+    .impact-toggle .impact-glyph {
+      width: 15px;
+      height: 15px;
+      flex: none;
+      color: var(--smart);
+    }
+
+    /* Icono al inicio de una linea del feed: se alinea con el texto en
+       vez de empujar la linea, para que el registro siga leyendose como
+       una columna de texto corrido. */
+    .log .log-icon {
+      width: 12px;
+      height: 12px;
+      flex: none;
+      vertical-align: -2px;
+      margin-right: 5px;
+    }
+
+    .config-body {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    #configPanel.config-collapsed .config-body {
+      display: none;
+    }
+
+    .field {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
 
     .field label {
       font-size: 10px;
@@ -485,7 +737,7 @@
 
     .field input[type="number"] {
       width: 66px;
-      font-family: var(--mono);
+      font-family: var(--Segoe UI);
       font-size: 12px;
       font-variant-numeric: tabular-nums;
       color: var(--txt);
@@ -502,7 +754,11 @@
       box-shadow: 0 0 0 3px #5B8CFF22;
     }
 
-    .field-hint { font-size: 10px; color: var(--txt-3); white-space: nowrap; }
+    .field-hint {
+      font-size: 10px;
+      color: var(--txt-3);
+      white-space: nowrap;
+    }
 
     /* ---------------- escenario principal ---------------- */
     .stage {
@@ -543,7 +799,8 @@
     }
 
     .live-dot {
-      width: 6px; height: 6px;
+      width: 6px;
+      height: 6px;
       border-radius: 99px;
       background: var(--danger);
       box-shadow: 0 0 8px var(--danger);
@@ -551,9 +808,18 @@
     }
 
     /* ---------------- marcador (scoreboard) ---------------- */
-    .scoreboard { padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+    .scoreboard {
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
 
-    .race { display: flex; flex-direction: column; gap: 10px; }
+    .race {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
 
     .race-row {
       position: relative;
@@ -568,15 +834,23 @@
       transition: border-color .25s ease, box-shadow .25s ease, transform .25s ease;
     }
 
-    .race-row.greedy.leading { border-color: #FF9D2E55; box-shadow: 0 0 0 1px #FF9D2E22, 0 8px 24px #FF9D2E14; }
-    .race-row.smart.leading { border-color: #1FD1B255; box-shadow: 0 0 0 1px #1FD1B222, 0 8px 24px #1FD1B214; }
+    .race-row.greedy.leading {
+      border-color: #FF9D2E55;
+      box-shadow: 0 0 0 1px #FF9D2E22, 0 8px 24px #FF9D2E14;
+    }
 
-    /* Corona discreta para el que va arriba: se entiende de un vistazo
-       desde el fondo de la sala, sin tener que leer los números. */
+    .race-row.smart.leading {
+      border-color: #1FD1B255;
+      box-shadow: 0 0 0 1px #1FD1B222, 0 8px 24px #1FD1B214;
+    }
+
+    /* Distintivo discreto para el que va arriba: se entiende de un
+       vistazo desde el fondo de la sala, sin leer los números. */
     .race-row.leading::after {
-      content: "▲ va arriba";
+      content: "Leading";
       position: absolute;
-      top: -8px; right: 10px;
+      top: -8px;
+      right: 10px;
       font-size: 9px;
       font-weight: 700;
       letter-spacing: .06em;
@@ -587,8 +861,13 @@
       border: 1px solid currentColor;
     }
 
-    .race-row.greedy.leading::after { color: var(--greedy); }
-    .race-row.smart.leading::after { color: var(--smart); }
+    .race-row.greedy.leading::after {
+      color: var(--greedy);
+    }
+
+    .race-row.smart.leading::after {
+      color: var(--smart);
+    }
 
     .race-label {
       grid-area: label;
@@ -601,7 +880,7 @@
     }
 
     .race-label small {
-      font-family: var(--mono);
+      font-family: var(--Segoe UI);
       font-size: 10px;
       font-weight: 500;
       color: var(--txt-3);
@@ -611,17 +890,25 @@
     }
 
     .race-label .dot {
-      width: 9px; height: 9px;
+      width: 9px;
+      height: 9px;
       border-radius: 99px;
       flex: none;
     }
 
-    .race-row.greedy .dot { background: var(--greedy); box-shadow: 0 0 10px var(--greedy); }
-    .race-row.smart .dot { background: var(--smart); box-shadow: 0 0 10px var(--smart); }
+    .race-row.greedy .dot {
+      background: var(--greedy);
+      box-shadow: 0 0 10px var(--greedy);
+    }
+
+    .race-row.smart .dot {
+      background: var(--smart);
+      box-shadow: 0 0 10px var(--smart);
+    }
 
     .race-value {
       grid-area: value;
-      font-family: var(--mono);
+      font-family: var(--Segoe UI);
       font-size: 22px;
       font-weight: 600;
       letter-spacing: -0.02em;
@@ -629,8 +916,13 @@
       line-height: 1;
     }
 
-    .race-row.greedy .race-value { color: var(--greedy); }
-    .race-row.smart .race-value { color: var(--smart); }
+    .race-row.greedy .race-value {
+      color: var(--greedy);
+    }
+
+    .race-row.smart .race-value {
+      color: var(--smart);
+    }
 
     .race-track {
       grid-area: track;
@@ -648,11 +940,20 @@
       transition: width .5s cubic-bezier(.4, 0, .2, 1);
     }
 
-    .race-row.greedy .race-fill { background: linear-gradient(90deg, #A85A0F, var(--greedy)); box-shadow: 0 0 10px #FF9D2E66; }
-    .race-row.smart .race-fill { background: linear-gradient(90deg, #0E7A69, var(--smart)); box-shadow: 0 0 10px #1FD1B266; }
+    .race-row.greedy .race-fill {
+      background: linear-gradient(90deg, #A85A0F, var(--greedy));
+      box-shadow: 0 0 10px #FF9D2E66;
+    }
+
+    .race-row.smart .race-fill {
+      background: linear-gradient(90deg, #0E7A69, var(--smart));
+      box-shadow: 0 0 10px #1FD1B266;
+    }
 
     /* ---------------- tarjetas de agente ---------------- */
-    .agent-card { padding: 0 0 12px; }
+    .agent-card {
+      padding: 0 0 12px;
+    }
 
     .agent-card .agent-h {
       display: flex;
@@ -664,11 +965,16 @@
       letter-spacing: .01em;
     }
 
-    .agent-card.greedy .agent-h { color: var(--greedy); }
-    .agent-card.smart .agent-h { color: var(--smart); }
+    .agent-card.greedy .agent-h {
+      color: var(--greedy);
+    }
+
+    .agent-card.smart .agent-h {
+      color: var(--smart);
+    }
 
     .agent-card .agent-h code {
-      font-family: var(--mono);
+      font-family: var(--Segoe UI);
       font-size: 10px;
       font-weight: 500;
       color: var(--txt-3);
@@ -689,10 +995,23 @@
       border-bottom: 1px solid var(--line-soft);
     }
 
-    .kpi.kpi-hero { grid-column: 1 / -1; padding: 10px 8px; }
-    .kpi.kpi-hero b { font-size: 23px; letter-spacing: -0.03em; }
-    .agent-card.greedy .kpi-hero b { color: var(--greedy); }
-    .agent-card.smart .kpi-hero b { color: var(--smart); }
+    .kpi.kpi-hero {
+      grid-column: 1 / -1;
+      padding: 10px 8px;
+    }
+
+    .kpi.kpi-hero b {
+      font-size: 23px;
+      letter-spacing: -0.03em;
+    }
+
+    .agent-card.greedy .kpi-hero b {
+      color: var(--greedy);
+    }
+
+    .agent-card.smart .kpi-hero b {
+      color: var(--smart);
+    }
 
     .kpi {
       background: var(--panel);
@@ -706,7 +1025,7 @@
     }
 
     .kpi b {
-      font-family: var(--mono);
+      font-family: var(--Segoe UI);
       font-size: 15px;
       font-weight: 600;
       font-variant-numeric: tabular-nums;
@@ -726,23 +1045,32 @@
 
     /* Destello al cambiar: hace visible el instante en que un KPI se
        mueve, que si no se pierde entre dos ticks. */
-    .kpi.flash { animation: kpi-flash 0.7s ease-out; }
+    .kpi.flash {
+      animation: kpi-flash 0.7s ease-out;
+    }
 
     @keyframes kpi-flash {
-      0% { background: #1E3A52; }
-      100% { background: var(--panel); }
+      0% {
+        background: #1E3A52;
+      }
+
+      100% {
+        background: var(--panel);
+      }
     }
 
     .current {
       padding: 8px 13px 0;
       font-size: 11px;
       color: var(--txt-2);
-      font-family: var(--mono);
+      font-family: var(--Segoe UI);
       line-height: 1.4;
     }
 
     /* ---------------- panel de impacto ---------------- */
-    .impact { overflow: hidden; }
+    .impact {
+      overflow: hidden;
+    }
 
     .impact-toggle {
       width: 100%;
@@ -760,7 +1088,10 @@
       text-align: left;
     }
 
-    .impact-toggle .chevron { color: var(--txt-3); font-size: 10px; }
+    .impact-toggle .chevron {
+      color: var(--txt-3);
+      font-size: 10px;
+    }
 
     .impact-toggle-hint {
       margin-left: auto;
@@ -777,11 +1108,22 @@
       padding-top: 12px;
     }
 
-    .impact.collapsed .impact-body { display: none; }
+    .impact.collapsed .impact-body {
+      display: none;
+    }
 
-    .impact-head { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
+    .impact-head {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
 
-    .impact-cost { display: flex; flex-direction: column; gap: 4px; }
+    .impact-cost {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
 
     .impact-cost label {
       font-size: 10px;
@@ -793,7 +1135,7 @@
 
     .impact-cost input {
       width: 100%;
-      font-family: var(--mono);
+      font-family: var(--Segoe UI);
       font-size: 12px;
       color: var(--txt);
       background: #0D1421;
@@ -803,13 +1145,30 @@
       outline: none;
     }
 
-    .impact-cost input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px #5B8CFF22; }
+    .impact-cost input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px #5B8CFF22;
+    }
 
-    .impact-cost span { font-size: 9.5px; color: var(--txt-3); line-height: 1.45; }
-    .impact-cost a { color: var(--accent); text-decoration: none; }
-    .impact-cost a:hover { text-decoration: underline; }
+    .impact-cost span {
+      font-size: 9.5px;
+      color: var(--txt-3);
+      line-height: 1.45;
+    }
 
-    .impact-grid { display: flex; flex-direction: column; }
+    .impact-cost a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    .impact-cost a:hover {
+      text-decoration: underline;
+    }
+
+    .impact-grid {
+      display: flex;
+      flex-direction: column;
+    }
 
     .impact-row {
       display: grid;
@@ -820,10 +1179,20 @@
       border-bottom: 1px solid var(--line-soft);
     }
 
-    .impact-row:last-child { border-bottom: none; }
+    .impact-row:last-child {
+      border-bottom: none;
+    }
 
-    .impact-row.impact-header { padding-bottom: 6px; border-bottom: 1px solid var(--line); }
-    .impact-row.impact-row-divider { border-top: 1px solid var(--line); margin-top: 4px; padding-top: 10px; }
+    .impact-row.impact-header {
+      padding-bottom: 6px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .impact-row.impact-row-divider {
+      border-top: 1px solid var(--line);
+      margin-top: 4px;
+      padding-top: 10px;
+    }
 
     .impact-col-label {
       font-size: 9.5px;
@@ -833,21 +1202,35 @@
       text-align: right;
     }
 
-    .impact-col-label.greedy { color: var(--greedy); }
-    .impact-col-label.smart { color: var(--smart); }
+    .impact-col-label.greedy {
+      color: var(--greedy);
+    }
 
-    .impact-label { font-size: 10.5px; color: var(--txt-2); line-height: 1.35; }
+    .impact-col-label.smart {
+      color: var(--smart);
+    }
+
+    .impact-label {
+      font-size: 10.5px;
+      color: var(--txt-2);
+      line-height: 1.35;
+    }
 
     .impact-val {
-      font-family: var(--mono);
+      font-family: var(--Segoe UI);
       font-size: 12px;
       font-weight: 600;
       font-variant-numeric: tabular-nums;
       text-align: right;
     }
 
-    .impact-val.greedy { color: var(--greedy); }
-    .impact-val.smart { color: var(--smart); }
+    .impact-val.greedy {
+      color: var(--greedy);
+    }
+
+    .impact-val.smart {
+      color: var(--smart);
+    }
 
     .impact-summary {
       margin-top: 12px;
@@ -871,7 +1254,11 @@
       min-height: 0;
     }
 
-    #map { position: absolute; inset: 0; background: #0B1018; }
+    #map {
+      position: absolute;
+      inset: 0;
+      background: #0B1018;
+    }
 
     /* Las teselas de OSM son claras; se filtran a oscuro para que el
        mapa deje de competir con los datos que van encima (rutas,
@@ -880,7 +1267,10 @@
       filter: invert(1) hue-rotate(185deg) grayscale(.6) brightness(.82) contrast(1.06);
     }
 
-    .leaflet-container { background: #0B1018; font-family: var(--sans); }
+    .leaflet-container {
+      background: #0B1018;
+      font-family: var(--sans);
+    }
 
     .leaflet-control-zoom a {
       background: #131C2C !important;
@@ -888,31 +1278,40 @@
       border-color: var(--line) !important;
     }
 
-    .leaflet-control-zoom a:hover { background: #1D283A !important; }
+    .leaflet-control-zoom a:hover {
+      background: #1D283A !important;
+    }
+
     .leaflet-control-attribution {
       background: #0B111Cbb !important;
       color: var(--txt-3) !important;
       font-size: 9px !important;
     }
-    .leaflet-control-attribution a { color: var(--txt-2) !important; }
+
+    .leaflet-control-attribution a {
+      color: var(--txt-2) !important;
+    }
 
     .leaflet-tooltip {
       background: #131C2C !important;
       border: 1px solid var(--line) !important;
       color: var(--txt) !important;
-      font-family: var(--mono) !important;
+      font-family: var(--Segoe UI) !important;
       font-size: 11px !important;
       border-radius: 7px !important;
       box-shadow: 0 6px 20px #000A !important;
     }
 
-    .leaflet-tooltip::before { display: none !important; }
+    .leaflet-tooltip::before {
+      display: none !important;
+    }
 
     /* A la derecha a propósito: arriba-izquierda vive el control de zoom
        de Leaflet y los dos se encimaban. */
     .map-hud {
       position: absolute;
-      top: 12px; right: 12px;
+      top: 12px;
+      right: 12px;
       z-index: 500;
       text-align: right;
       align-items: flex-end;
@@ -928,12 +1327,21 @@
       pointer-events: none;
     }
 
-    .map-hud strong { font-size: 12px; font-weight: 700; letter-spacing: -0.01em; }
-    .map-hud span { font-size: 10px; color: var(--txt-3); }
+    .map-hud strong {
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+    }
+
+    .map-hud span {
+      font-size: 10px;
+      color: var(--txt-3);
+    }
 
     .legend {
       position: absolute;
-      bottom: 12px; left: 12px;
+      bottom: 12px;
+      left: 12px;
       z-index: 500;
       padding: 10px 12px;
       border-radius: var(--r-md);
@@ -957,7 +1365,8 @@
     }
 
     .legend span {
-      width: 9px; height: 9px;
+      width: 9px;
+      height: 9px;
       border-radius: 3px;
       flex: none;
     }
@@ -986,12 +1395,22 @@
       animation: rain-slide .32s linear infinite;
     }
 
-    .weather-overlay.traffic { background: linear-gradient(180deg, #FF6B3522, #4A140033); }
-    .weather-overlay.heat { background: radial-gradient(circle at 50% 40%, #FFB03533, transparent 70%), linear-gradient(180deg, #FF8A0018, #3A1A0022); }
+    .weather-overlay.traffic {
+      background: linear-gradient(180deg, #FF6B3522, #4A140033);
+    }
+
+    .weather-overlay.heat {
+      background: radial-gradient(circle at 50% 40%, #FFB03533, transparent 70%), linear-gradient(180deg, #FF8A0018, #3A1A0022);
+    }
 
     @keyframes rain-slide {
-      from { background-position: 0 0, 0 0; }
-      to { background-position: -18px 40px, 0 0; }
+      from {
+        background-position: 0 0, 0 0;
+      }
+
+      to {
+        background-position: -18px 40px, 0 0;
+      }
     }
 
     /* Banner de evento sobre el mapa */
@@ -1018,13 +1437,50 @@
       white-space: nowrap;
     }
 
-    .event-banner.visible { opacity: 1; transform: translate(-50%, 0); }
-    .event-banner .event-icon { font-size: 15px; }
-    .event-banner.rain { border-color: #3E8FD0; color: #9FD8FF; box-shadow: 0 0 26px #3E8FD044; }
-    .event-banner.flood { border-color: #2E6FA8; color: #7FC8FF; box-shadow: 0 0 26px #2E6FA855; }
-    .event-banner.traffic { border-color: #C4622E; color: #FFB185; box-shadow: 0 0 26px #C4622E44; }
-    .event-banner.heat { border-color: #C4952E; color: #FFD98A; box-shadow: 0 0 26px #C4952E44; }
-    .event-banner.clear { border-color: var(--line); color: var(--txt-2); }
+    .event-banner.visible {
+      opacity: 1;
+      transform: translate(-50%, 0);
+    }
+
+    .event-banner .event-icon {
+      display: inline-flex;
+    }
+
+    .event-banner .event-icon svg {
+      width: 16px;
+      height: 16px;
+      margin: 0;
+      vertical-align: 0;
+    }
+
+    .event-banner.rain {
+      border-color: #3E8FD0;
+      color: #9FD8FF;
+      box-shadow: 0 0 26px #3E8FD044;
+    }
+
+    .event-banner.flood {
+      border-color: #2E6FA8;
+      color: #7FC8FF;
+      box-shadow: 0 0 26px #2E6FA855;
+    }
+
+    .event-banner.traffic {
+      border-color: #C4622E;
+      color: #FFB185;
+      box-shadow: 0 0 26px #C4622E44;
+    }
+
+    .event-banner.heat {
+      border-color: #C4952E;
+      color: #FFD98A;
+      box-shadow: 0 0 26px #C4952E44;
+    }
+
+    .event-banner.clear {
+      border-color: var(--line);
+      color: var(--txt-2);
+    }
 
     /* ---------------- feed de decisiones ---------------- */
     .feed-panel {
@@ -1038,30 +1494,50 @@
       flex: 1 1 auto;
       overflow-y: auto;
       padding: 10px 14px 14px;
-      font-family: var(--mono);
+      font-family: var(--Segoe UI);
       font-size: 10.5px;
       line-height: 1.55;
       color: var(--txt-2);
       min-height: 140px;
     }
 
-    .log > div {
+    .log>div {
       padding: 6px 0;
       border-bottom: 1px solid #141C2B;
       animation: log-in .25s ease-out;
       word-break: break-word;
     }
 
-    .log > div:last-child { border-bottom: none; }
-
-    @keyframes log-in {
-      from { opacity: 0; transform: translateY(-5px); }
-      to { opacity: 1; transform: translateY(0); }
+    .log>div:last-child {
+      border-bottom: none;
     }
 
-    .log .accept { color: var(--smart); font-weight: 600; }
-    .log .reject { color: var(--danger); font-weight: 600; }
-    .log .timeout { color: var(--warn); font-weight: 600; }
+    @keyframes log-in {
+      from {
+        opacity: 0;
+        transform: translateY(-5px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .log .accept {
+      color: var(--smart);
+      font-weight: 600;
+    }
+
+    .log .reject {
+      color: var(--danger);
+      font-weight: 600;
+    }
+
+    .log .timeout {
+      color: var(--warn);
+      font-weight: 600;
+    }
 
     .log .event {
       display: inline-block;
@@ -1073,17 +1549,45 @@
       border: 1px solid #5B8CFF33;
     }
 
-    .log .event.real-weather { color: #9FD8FF; background: #3E8FD01A; border-color: #3E8FD033; }
+    .log .event.real-weather {
+      color: #9FD8FF;
+      background: #3E8FD01A;
+      border-color: #3E8FD033;
+    }
 
-    .log .pickup { color: var(--warn); font-weight: 600; }
-    .log .delivered { font-weight: 600; }
-    .log .delivered.greedy { color: var(--greedy); }
-    .log .delivered.smart { color: var(--smart); }
-    .log .delivered.late { color: var(--danger); }
-    .log .pickup.greedy { color: var(--greedy); }
-    .log .pickup.smart { color: var(--smart); }
+    .log .pickup {
+      color: var(--warn);
+      font-weight: 600;
+    }
 
-    .log .fare { color: var(--txt); font-weight: 600; }
+    .log .delivered {
+      font-weight: 600;
+    }
+
+    .log .delivered.greedy {
+      color: var(--greedy);
+    }
+
+    .log .delivered.smart {
+      color: var(--smart);
+    }
+
+    .log .delivered.late {
+      color: var(--danger);
+    }
+
+    .log .pickup.greedy {
+      color: var(--greedy);
+    }
+
+    .log .pickup.smart {
+      color: var(--smart);
+    }
+
+    .log .fare {
+      color: var(--txt);
+      font-weight: 600;
+    }
 
     .log .latency {
       display: inline-block;
@@ -1095,17 +1599,42 @@
       color: var(--txt-3);
     }
 
-    .log .latency.reject { color: var(--warn); border-color: #6B520F; background: #2A2005; }
-    .log .latency.timeout { color: var(--danger); border-color: #6B1023; background: #2A0510; }
+    .log .latency.reject {
+      color: var(--warn);
+      border-color: #6B520F;
+      background: #2A2005;
+    }
+
+    .log .latency.timeout {
+      color: var(--danger);
+      border-color: #6B1023;
+      background: #2A0510;
+    }
 
     /* ---------------- gráfica ---------------- */
-    .chart-panel { flex: none; padding-bottom: 12px; }
-    .chart-panel canvas { width: 100%; height: 130px; display: block; padding: 8px 12px 0; }
+    .chart-panel {
+      flex: none;
+      padding-bottom: 12px;
+    }
+
+    .chart-panel canvas {
+      width: 100%;
+      height: 130px;
+      display: block;
+      padding: 8px 12px 0;
+    }
 
     /* ---------------- marcadores del mapa (Leaflet) ---------------- */
-    .driver-icon { background: none !important; border: none !important; }
+    .driver-icon {
+      background: none !important;
+      border: none !important;
+    }
 
-    .driver-wrap { position: relative; width: 34px; height: 34px; }
+    .driver-wrap {
+      position: relative;
+      width: 34px;
+      height: 34px;
+    }
 
     .driver-marker {
       position: absolute;
@@ -1113,7 +1642,7 @@
       display: grid;
       place-items: center;
       border-radius: 99px;
-      font-family: var(--mono);
+      font-family: var(--Segoe UI);
       font-size: 13px;
       font-weight: 700;
       color: #06101B;
@@ -1121,15 +1650,24 @@
       transition: transform .3s ease;
     }
 
-    .driver-marker.greedy { background: var(--greedy); box-shadow: 0 0 0 3px #FF9D2E33, 0 0 22px #FF9D2E88; }
-    .driver-marker.smart { background: var(--smart); box-shadow: 0 0 0 3px #1FD1B233, 0 0 22px #1FD1B288; }
+    .driver-marker.greedy {
+      background: var(--greedy);
+      box-shadow: 0 0 0 3px #FF9D2E33, 0 0 22px #FF9D2E88;
+    }
+
+    .driver-marker.smart {
+      background: var(--smart);
+      box-shadow: 0 0 0 3px #1FD1B233, 0 0 22px #1FD1B288;
+    }
 
     /* Punta que indica hacia dónde va el repartidor: el JS le rota el
        transform según el rumbo real del tramo que está recorriendo. */
     .driver-heading {
       position: absolute;
-      left: 50%; top: 50%;
-      width: 0; height: 0;
+      left: 50%;
+      top: 50%;
+      width: 0;
+      height: 0;
       border-left: 5px solid transparent;
       border-right: 5px solid transparent;
       border-bottom: 9px solid #fff;
@@ -1139,14 +1677,18 @@
       filter: drop-shadow(0 0 3px #000A);
     }
 
-    .order-pin { background: none !important; border: none !important; }
+    .order-pin {
+      background: none !important;
+      border: none !important;
+    }
 
     .order-marker {
-      width: 22px; height: 22px;
+      width: 22px;
+      height: 22px;
       display: grid;
       place-items: center;
       border-radius: 7px;
-      font-family: var(--mono);
+      font-family: var(--Segoe UI);
       font-size: 10px;
       font-weight: 700;
       color: #06101B;
@@ -1154,14 +1696,30 @@
       transition: opacity .5s ease, transform .3s ease, filter .5s ease;
     }
 
-    .order-marker.pickup { background: #F0A43C; box-shadow: 0 0 12px #F0A43C77; }
-    .order-marker.dropoff { background: #9B85FF; box-shadow: 0 0 12px #9B85FF77; }
+    .order-marker.pickup {
+      background: #F0A43C;
+      box-shadow: 0 0 12px #F0A43C77;
+    }
 
-    .order-marker.pending { animation: pin-pulse 2s ease-in-out infinite; }
+    .order-marker.dropoff {
+      background: #9B85FF;
+      box-shadow: 0 0 12px #9B85FF77;
+    }
+
+    .order-marker.pending {
+      animation: pin-pulse 2s ease-in-out infinite;
+    }
 
     @keyframes pin-pulse {
-      0%, 100% { transform: scale(1); }
-      50% { transform: scale(1.16); }
+
+      0%,
+      100% {
+        transform: scale(1);
+      }
+
+      50% {
+        transform: scale(1.16);
+      }
     }
 
     .order-marker.collected {
@@ -1177,24 +1735,38 @@
       pointer-events: none;
     }
 
-    .order-ping-wrap { background: none !important; border: none !important; }
+    .order-ping-wrap {
+      background: none !important;
+      border: none !important;
+    }
 
     .order-ping {
-      width: 16px; height: 16px;
+      width: 16px;
+      height: 16px;
       border-radius: 99px;
       border: 2px solid var(--ping-color, #fff);
       animation: ping-out .78s ease-out forwards;
     }
 
     @keyframes ping-out {
-      from { transform: scale(.4); opacity: .95; }
-      to { transform: scale(3.4); opacity: 0; }
+      from {
+        transform: scale(.4);
+        opacity: .95;
+      }
+
+      to {
+        transform: scale(3.4);
+        opacity: 0;
+      }
     }
 
-    .float-earn-wrap { background: none !important; border: none !important; }
+    .float-earn-wrap {
+      background: none !important;
+      border: none !important;
+    }
 
     .float-earn {
-      font-family: var(--mono);
+      font-family: var(--Segoe UI);
       font-size: 12px;
       font-weight: 700;
       color: var(--ping-color, #fff);
@@ -1204,9 +1776,19 @@
     }
 
     @keyframes float-up {
-      0% { transform: translateY(6px); opacity: 0; }
-      20% { opacity: 1; }
-      100% { transform: translateY(-24px); opacity: 0; }
+      0% {
+        transform: translateY(6px);
+        opacity: 0;
+      }
+
+      20% {
+        opacity: 1;
+      }
+
+      100% {
+        transform: translateY(-24px);
+        opacity: 0;
+      }
     }
 
     /* ---------------- modo presentación ---------------- */
@@ -1214,18 +1796,41 @@
        supuestos del panel de impacto) y agranda lo que se proyecta. */
     .app.present .thesis,
     .app.present #configPanel,
-    .app.present .impact-head { display: none; }
+    .app.present .impact-head {
+      display: none;
+    }
 
-    .app.present { --rail-l: 380px; --rail-r: 400px; }
-    .app.present .race-value { font-size: 30px; }
-    .app.present .kpi b { font-size: 19px; }
-    .app.present .kpi span { font-size: 9.5px; }
-    .app.present .log { font-size: 11.5px; }
-    .app.present .brand p { display: none; }
+    .app.present {
+      --rail-l: 380px;
+      --rail-r: 400px;
+    }
+
+    .app.present .race-value {
+      font-size: 30px;
+    }
+
+    .app.present .kpi b {
+      font-size: 19px;
+    }
+
+    .app.present .kpi span {
+      font-size: 9.5px;
+    }
+
+    .app.present .log {
+      font-size: 11.5px;
+    }
+
+    .app.present .brand p {
+      display: none;
+    }
 
     /* ---------------- adaptable ---------------- */
     @media (max-width: 1500px) {
-      :root { --rail-l: 310px; --rail-r: 330px; }
+      :root {
+        --rail-l: 310px;
+        --rail-r: 330px;
+      }
     }
 
     @media (max-width: 1280px) {
@@ -1233,23 +1838,58 @@
         grid-template-columns: 300px minmax(0, 1fr);
         grid-template-rows: minmax(320px, 1fr) minmax(240px, 44%);
       }
-      .rail-right { grid-column: 1 / -1; }
-      .rail-right { flex-direction: row; overflow: visible; }
-      .feed-panel { flex: 1 1 60%; }
-      .chart-panel { flex: 1 1 40%; }
+
+      .rail-right {
+        grid-column: 1 / -1;
+      }
+
+      .rail-right {
+        flex-direction: row;
+        overflow: visible;
+      }
+
+      .feed-panel {
+        flex: 1 1 60%;
+      }
+
+      .chart-panel {
+        flex: 1 1 40%;
+      }
     }
 
     @media (max-width: 980px) {
-      html, body { overflow: auto; }
-      .app { height: auto; }
+
+      html,
+      body {
+        overflow: auto;
+      }
+
+      .app {
+        height: auto;
+      }
+
       .stage {
         grid-template-columns: minmax(0, 1fr);
         grid-template-rows: none;
       }
-      .rail { overflow: visible; }
-      .map-wrap { min-height: 460px; }
-      .rail-right { flex-direction: column; }
-      .cb-env { margin-left: 0; align-items: flex-start; text-align: left; }
+
+      .rail {
+        overflow: visible;
+      }
+
+      .map-wrap {
+        min-height: 460px;
+      }
+
+      .rail-right {
+        flex-direction: column;
+      }
+
+      .cb-env {
+        margin-left: 0;
+        align-items: flex-start;
+        text-align: left;
+      }
     }
   </style>
 </head>
@@ -1259,24 +1899,51 @@
 
     <header class="topbar">
       <div class="brand">
-        <div class="brand-mark">🛵</div>
-        <div>
-          <h1>The Courier</h1>
-          <p>Dos IAs, el mismo turno, la misma calle de Monterrey — una ignora el riesgo, la otra no.</p>
+        <div class="brand-mark">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"
+            stroke-linejoin="round">
+            <circle cx="5.5" cy="5.5" r="2.5" />
+            <circle cx="18.5" cy="18.5" r="2.5" />
+            <path d="M5.5 8v4a4 4 0 0 0 4 4h5" />
+          </svg>
         </div>
+        <div class="brand-text">
+          <h1>The Courier</h1>
+        </div>
+      </div>
+
+      <div class="header-pill" id="graphPill">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+          stroke-linejoin="round">
+          <path d="M9 3 3 5.6v15L9 18l6 3 6-2.6v-15L15 6 9 3z" />
+          <path d="M9 3v15M15 6v15" />
+        </svg>
+        <span id="graphPillLabel">Monterrey road graph</span>
+        <svg class="pill-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
+          stroke-linecap="round" stroke-linejoin="round">
+          <path d="m9 5 7 7-7 7" />
+        </svg>
       </div>
 
       <div class="topbar-spacer"></div>
 
       <div class="sim-clock">
         <div id="simClock">08:00:00</div>
-        <span id="simClockMeta">hora simulada · detenido · velocidad 80x</span>
+        <span id="simClockMeta">simulated time · stopped · speed 80x</span>
       </div>
 
       <div class="topbar-div"></div>
 
-      <div id="status" class="status-pill">Listo para simular</div>
-      <button id="presentToggle" class="ghost-btn" type="button">🎤 Presentación</button>
+      <div id="status" class="status-pill">Ready to simulate</div>
+
+      <button id="presentToggle" class="round-btn" type="button" title="Presentation mode"
+        aria-label="Presentation mode">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+          stroke-linejoin="round">
+          <rect x="2.5" y="4" width="19" height="12.5" rx="2" />
+          <path d="M12 16.5V21M8 21h8" />
+        </svg>
+      </button>
     </header>
 
     <div class="progress-track">
@@ -1285,43 +1952,87 @@
 
     <div class="thesis">
       <span class="chip greedy">Greedy</span>
-      <span>va por el camino más rápido a secas e ignora el riesgo por diseño</span>
+      <span>takes the plain fastest path</span>
       <span class="sep">|</span>
       <span class="chip smart">Risk-averse</span>
-      <span>pondera <strong>Te + α·Re</strong>: recorre el camino más seguro para la misma entrega y cobra más
-        Bonus de Riesgo</span>
+      <span>weighs <strong>Te + α·Re</strong>: drives the safer path for the same delivery and earns a bigger
+        Risk Bonus</span>
       <span class="sep">|</span>
-      <span>ambos <strong>aceptan el 100%</strong> de los pedidos · cada decisión bajo un límite duro de
-        <strong>200 ms</strong></span>
     </div>
 
     <div class="controlbar">
       <div class="cb-group">
-        <button id="start" class="primary">▶ Iniciar turno</button>
-        <button id="stop" disabled>Detener</button>
+        <button id="start" class="primary">
+          <svg viewBox="0 0 24 24" fill="currentColor">
+            <path d="M8 5.5v13a1 1 0 0 0 1.53.85l10-6.5a1 1 0 0 0 0-1.7l-10-6.5A1 1 0 0 0 8 5.5z" />
+          </svg>
+          Start shift
+        </button>
+        <button id="stop" disabled>Stop</button>
       </div>
 
       <div class="topbar-div"></div>
 
       <div class="cb-group">
-        <span class="cb-label">Evento sorpresa</span>
+        <span class="cb-label">Surprise event</span>
         <div class="events">
-          <button data-event="HEAVY_RAIN">🌧️ Lluvia</button>
-          <button data-event="FLASH_FLOOD">🌊 Inundación</button>
-          <button data-event="HEAVY_TRAFFIC">🚗 Tráfico</button>
-          <button data-event="EXTREME_HEAT">🔥 Calor</button>
-          <button data-event="CLEAR">☀️ Despejado</button>
+          <button data-event="HEAVY_RAIN">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"
+              stroke-linejoin="round">
+              <path d="M17 13.5a4 4 0 0 0-.8-7.9 5.5 5.5 0 0 0-10.5 2A3.6 3.6 0 0 0 6 13.5z" />
+              <path d="M8 17v2.5M12 17.5v3M16 17v2.5" />
+            </svg>
+            Rain
+          </button>
+          <button data-event="FLASH_FLOOD">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"
+              stroke-linejoin="round">
+              <path
+                d="M2.5 8.5c1.6 0 1.6 1.4 3.2 1.4S7.3 8.5 8.9 8.5s1.6 1.4 3.2 1.4 1.6-1.4 3.2-1.4 1.6 1.4 3.2 1.4 1.6-1.4 3.2-1.4" />
+              <path
+                d="M2.5 14c1.6 0 1.6 1.4 3.2 1.4S7.3 14 8.9 14s1.6 1.4 3.2 1.4S13.7 14 15.3 14s1.6 1.4 3.2 1.4S20.1 14 21.7 14" />
+              <path
+                d="M2.5 19.5c1.6 0 1.6 1.4 3.2 1.4s1.6-1.4 3.2-1.4 1.6 1.4 3.2 1.4 1.6-1.4 3.2-1.4 1.6 1.4 3.2 1.4 1.6-1.4 3.2-1.4" />
+            </svg>
+            Flood
+          </button>
+          <button data-event="HEAVY_TRAFFIC">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"
+              stroke-linejoin="round">
+              <path d="M4 16.5v2a1 1 0 0 1-1 1H2.5M20 16.5v2a1 1 0 0 0 1 1h.5" />
+              <path d="M3 16.5h18v-4l-1.8-4.6A2 2 0 0 0 17.3 6.5H6.7a2 2 0 0 0-1.9 1.4L3 12.5z" />
+              <path d="M6.5 15.5h.01M17.5 15.5h.01" />
+            </svg>
+            Traffic
+          </button>
+          <button data-event="EXTREME_HEAT">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"
+              stroke-linejoin="round">
+              <path d="M14 14.8V5a2 2 0 1 0-4 0v9.8a4 4 0 1 0 4 0z" />
+              <path d="M12 11v4.4" />
+            </svg>
+            Heat
+          </button>
+          <button data-event="CLEAR">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"
+              stroke-linejoin="round">
+              <circle cx="12" cy="12" r="4" />
+              <path
+                d="M12 2.5v2.2M12 19.3v2.2M4.2 4.2l1.6 1.6M18.2 18.2l1.6 1.6M2.5 12h2.2M19.3 12h2.2M4.2 19.8l1.6-1.6M18.2 5.8l1.6-1.6" />
+            </svg>
+            Clear
+          </button>
         </div>
       </div>
 
       <div class="cb-sev">
-        <span class="cb-label">Severidad</span>
+        <span class="cb-label">Severity</span>
         <input id="severity" type="range" min="0" max="1" step="0.05" value="0.8" />
         <b id="sevLabel">0.80</b>
       </div>
 
       <div class="cb-env">
-        <p id="envLine">Clima: CLEAR</p>
+        <p id="envLine">Weather: CLEAR</p>
         <p id="realWeatherLine"></p>
         <p id="sessionLine"></p>
       </div>
@@ -1329,32 +2040,36 @@
 
     <aside id="configPanel">
       <div class="config-header">
-        <button class="icon-btn" id="configToggle" type="button" aria-expanded="true"
-          title="Mostrar/ocultar parámetros">
-          <span class="chevron">▾</span>
+        <button class="icon-btn" id="configToggle" type="button" aria-expanded="true" title="Show/hide parameters">
+          <span class="chevron">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"
+              stroke-linejoin="round">
+              <path d="m5 9 7 7 7-7" />
+            </svg>
+          </span>
         </button>
-        <h3>Configuración</h3>
+        <h3>Configuration</h3>
       </div>
       <div class="config-body" id="configBody">
         <div class="field">
-          <label for="seed">Semilla</label>
+          <label for="seed">Seed</label>
           <input id="seed" type="number" value="42" />
         </div>
         <div class="field">
-          <label for="orders">Pedidos</label>
+          <label for="orders">Orders</label>
           <input id="orders" type="number" value="12" min="1" max="500" />
         </div>
         <div class="field">
-          <label for="durationHours">Turno (h)</label>
+          <label for="durationHours">Shift (h)</label>
           <input id="durationHours" type="number" value="1.5" min="0.1" step="0.25" />
-          <span class="field-hint" id="durationRealHint">≈ 68 s reales a 80x</span>
+          <span class="field-hint" id="durationRealHint">≈ 68 s real at 80x</span>
         </div>
         <div class="field">
           <label for="tick">Tick (s)</label>
           <input id="tick" type="number" value="30" min="5" />
         </div>
         <div class="field">
-          <label for="speed">Velocidad <b id="speedLabel">80x</b></label>
+          <label for="speed">Speed <b id="speedLabel">80x</b></label>
           <input id="speed" type="number" value="80" min="1" step="1" />
         </div>
         <div class="field">
@@ -1389,36 +2104,46 @@
         </section>
 
         <section class="panel agent-card greedy">
-          <div class="agent-h">Agente base <code>greedy_base</code></div>
+          <div class="agent-h">Baseline agent <code>greedy_base</code></div>
           <div class="kpis" id="kpis-greedy"></div>
-          <div class="current" id="cur-greedy">Sin pedido en curso</div>
+          <div class="current" id="cur-greedy">No order in progress</div>
         </section>
 
         <section class="panel agent-card smart">
-          <div class="agent-h">Agente inteligente <code>risk_averse_smart</code></div>
+          <div class="agent-h">Intelligent agent <code>risk_averse_smart</code></div>
           <div class="kpis" id="kpis-smart"></div>
-          <div class="current" id="cur-smart">Sin pedido en curso</div>
+          <div class="current" id="cur-smart">No order in progress</div>
         </section>
 
         <section class="panel impact collapsed" id="impact">
           <button class="impact-toggle" id="impactToggle" type="button" aria-expanded="false">
-            <span class="chevron">▾</span> 🛡️ Impacto de seguridad
-            <span class="impact-toggle-hint" id="impactToggleHint">— corre un turno para verlo</span>
+            <span class="chevron">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"
+                stroke-linejoin="round">
+                <path d="m5 9 7 7 7-7" />
+              </svg>
+            </span>
+            <svg class="impact-glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+              stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 2.8 4.5 6v6c0 4.6 3.2 7.9 7.5 9.2 4.3-1.3 7.5-4.6 7.5-9.2V6z" />
+            </svg>
+            Safety impact
+            <span class="impact-toggle-hint" id="impactToggleHint">— run a shift to see it</span>
           </button>
           <div class="impact-body" id="impactBody">
             <div class="impact-head">
               <div class="impact-cost">
-                <label for="incidentCost">Costo promedio por incidente vial</label>
+                <label for="incidentCost">Average cost per road incident</label>
                 <input id="incidentCost" type="number" value="35000" min="0" step="500" />
-                <span>MXN · rango típico $25,000–$50,000 por daños materiales/atención (<a
+                <span>MXN · typical range $25,000–$50,000 for property damage/medical care (<a
                     href="https://www.rastreator.mx/seguros-de-auto/articulos-destacados/cuanto-cuesta-un-accidente-vial-en-mexico"
-                    target="_blank" rel="noopener">Rastreator/IMCO</a>), ajustable</span>
+                    target="_blank" rel="noopener">Rastreator/IMCO</a>), adjustable</span>
               </div>
               <div class="impact-cost">
-                <label for="accidentRate">Incidencia base sin mitigar</label>
+                <label for="accidentRate">Unmitigated baseline incidence</label>
                 <input id="accidentRate" type="number" value="2.5" min="0" step="0.1" />
-                <span>accidentes / 1,000 h de reparto · estimación ilustrativa (no hay tasa oficial pública para
-                  repartidores), ajustable</span>
+                <span>accidents / 1,000 h of delivery · illustrative estimate (no official public rate exists for
+                  couriers), adjustable</span>
               </div>
             </div>
             <div class="impact-grid">
@@ -1428,32 +2153,32 @@
                 <span class="impact-col-label smart">Risk-av.</span>
               </div>
               <div class="impact-row">
-                <span class="impact-label">Riesgo promedio de la ruta entregada (Re)</span>
+                <span class="impact-label">Average risk of the route driven (Re)</span>
                 <span class="impact-val greedy" id="impactRiskGreedy">—</span>
                 <span class="impact-val smart" id="impactRiskSmart">—</span>
               </div>
               <div class="impact-row">
-                <span class="impact-label">Pedidos de alto riesgo entregados</span>
+                <span class="impact-label">High-risk orders delivered</span>
                 <span class="impact-val greedy" id="impactRiskyGreedy">—</span>
                 <span class="impact-val smart" id="impactRiskySmart">—</span>
               </div>
               <div class="impact-row">
-                <span class="impact-label">Puntos no obtenidos por falta de tiempo</span>
+                <span class="impact-label">Points missed for lack of time</span>
                 <span class="impact-val greedy" id="impactSafetyGreedy">—</span>
                 <span class="impact-val smart" id="impactSafetySmart">—</span>
               </div>
               <div class="impact-row impact-row-divider">
-                <span class="impact-label">Puntos totales por hora trabajada</span>
+                <span class="impact-label">Total points per hour worked</span>
                 <span class="impact-val greedy" id="impactEarnHourGreedy">—</span>
                 <span class="impact-val smart" id="impactEarnHourSmart">—</span>
               </div>
               <div class="impact-row">
-                <span class="impact-label">Costo esperado por accidentes, por hora</span>
+                <span class="impact-label">Expected accident cost, per hour</span>
                 <span class="impact-val greedy" id="impactSavingsHourGreedy">—</span>
                 <span class="impact-val smart" id="impactSavingsHourSmart">—</span>
               </div>
             </div>
-            <div class="impact-summary" id="impactSummary">Corre un turno para ver el impacto en vivo.</div>
+            <div class="impact-summary" id="impactSummary">Run a shift to see the live impact.</div>
           </div>
         </section>
 
@@ -1467,26 +2192,26 @@
           <span id="eventText"></span>
         </div>
         <div class="map-hud">
-          <strong>Centro de Monterrey</strong>
-          <span id="mapSummary">Macroplaza · Barrio Antiguo · rutas por calles</span>
+          <strong>Downtown Monterrey</strong>
+          <span id="mapSummary">Macroplaza · Barrio Antiguo · street-level routing</span>
         </div>
         <div class="legend">
           <div><span style="background:var(--greedy)"></span>Greedy</div>
           <div><span style="background:var(--smart)"></span>Risk-averse</div>
           <div><span style="background:#F0A43C"></span>Pickup</div>
           <div><span style="background:#9B85FF"></span>Dropoff</div>
-          <div><span style="background:#D45D5D;opacity:.55"></span>Zona inundable</div>
-          <div><span style="background:#C77DFF;opacity:.55"></span>Cruce con más accidentes</div>
+          <div><span style="background:#D45D5D;opacity:.55"></span>Flood-prone zone</div>
+          <div><span style="background:#C77DFF;opacity:.55"></span>Accident hotspot</div>
         </div>
       </div>
 
       <aside class="rail rail-right">
         <section class="panel feed-panel">
-          <div class="panel-h"><span class="live-dot"></span> Decisiones recientes</div>
-          <div id="log" class="log">Aún no hay decisiones.</div>
+          <div class="panel-h"><span class="live-dot"></span> Recent decisions</div>
+          <div id="log" class="log">No decisions yet.</div>
         </section>
         <section class="panel chart-panel">
-          <div class="panel-h">Puntos acumulados</div>
+          <div class="panel-h">Points accumulated</div>
           <canvas id="chart" width="700" height="260"></canvas>
         </section>
       </aside>
@@ -1497,6 +2222,35 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
     const AGENT_KEY = { greedy_base: "greedy", risk_averse_smart: "smart" };
+
+    // Iconos de linea en SVG, un solo juego para el feed y el banner de
+    // clima. Van aqui como cadenas (y no como <svg> en el markup) porque
+    // estas marcas se insertan desde JS al construir cada linea del
+    // registro; sustituyen a los emojis, que se veian inconsistentes
+    // entre sistemas y no heredaban el color del estado de la linea.
+    const ICON = (() => {
+      const wrap = (paths, fill) =>
+        `<svg class="log-icon" viewBox="0 0 24 24" fill="${fill ? "currentColor" : "none"}" ` +
+        `stroke="${fill ? "none" : "currentColor"}" stroke-width="2" stroke-linecap="round" ` +
+        `stroke-linejoin="round">${paths}</svg>`;
+      return {
+        parcel: wrap('<path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="m3 8 9 5 9-5M12 13v8"/>'),
+        check: wrap('<path d="m4.5 12.5 5 5 10-11"/>'),
+        clock: wrap('<circle cx="12" cy="12" r="9"/><path d="M12 6.8V12l3.4 2.2"/>'),
+        globe: wrap('<circle cx="12" cy="12" r="9"/><path d="M3.2 9.5h17.6M3.2 14.5h17.6"/>' +
+          '<path d="M12 3a15 15 0 0 1 0 18 15 15 0 0 1 0-18z"/>'),
+        warning: wrap('<path d="M12 4 2.8 20h18.4z"/><path d="M12 10v4.2M12 17.4h.01"/>'),
+        rain: wrap('<path d="M17 13.5a4 4 0 0 0-.8-7.9 5.5 5.5 0 0 0-10.5 2A3.6 3.6 0 0 0 6 13.5z"/>' +
+          '<path d="M8 17v2.5M12 17.5v3M16 17v2.5"/>'),
+        flood: wrap('<path d="M2.5 9c1.6 0 1.6 1.4 3.2 1.4S7.3 9 8.9 9s1.6 1.4 3.2 1.4S13.7 9 15.3 9s1.6 1.4 3.2 1.4S20.1 9 21.7 9"/>' +
+          '<path d="M2.5 15c1.6 0 1.6 1.4 3.2 1.4S7.3 15 8.9 15s1.6 1.4 3.2 1.4 1.6-1.4 3.2-1.4 1.6 1.4 3.2 1.4 1.6-1.4 3.2-1.4"/>'),
+        traffic: wrap('<path d="M3 16.5h18v-4l-1.8-4.6A2 2 0 0 0 17.3 6.5H6.7a2 2 0 0 0-1.9 1.4L3 12.5z"/>' +
+          '<path d="M6.5 15.5h.01M17.5 15.5h.01"/>'),
+        heat: wrap('<path d="M14 14.8V5a2 2 0 1 0-4 0v9.8a4 4 0 1 0 4 0z"/>'),
+        sun: wrap('<circle cx="12" cy="12" r="4"/>' +
+          '<path d="M12 2.5v2.2M12 19.3v2.2M4.2 4.2l1.6 1.6M18.2 18.2l1.6 1.6M2.5 12h2.2M19.3 12h2.2M4.2 19.8l1.6-1.6M18.2 5.8l1.6-1.6"/>'),
+      };
+    })();
     const state = {
       ws: null,
       sessionId: null,
@@ -1547,11 +2301,11 @@
     const greedyMarker = L.marker([25.6714, -100.3092], {
       icon: L.divIcon({ className: "driver-icon", html: '<div class="driver-wrap"><span class="driver-heading"></span><span class="driver-marker greedy">G</span></div>', iconSize: [34, 34], iconAnchor: [17, 17] }),
       zIndexOffset: 1000,
-    }).addTo(map).bindTooltip("Greedy · ruta común");
+    }).addTo(map).bindTooltip("Greedy · shared route");
     const smartMarker = L.marker([25.6714, -100.3092], {
       icon: L.divIcon({ className: "driver-icon", html: '<div class="driver-wrap"><span class="driver-heading"></span><span class="driver-marker smart">R</span></div>', iconSize: [34, 34], iconAnchor: [17, 17] }),
       zIndexOffset: 1100,
-    }).addTo(map).bindTooltip("Risk-averse · ruta común");
+    }).addTo(map).bindTooltip("Risk-averse · shared route");
     const depotMarker = L.circleMarker([25.6714, -100.3092], { radius: 6, color: "#e7ecf3", fillColor: "#0e1116", fillOpacity: 1, weight: 2 }).addTo(map).bindTooltip("Depósito");
 
     document.getElementById("severity").addEventListener("input", (e) => {
@@ -1587,7 +2341,7 @@
       const speed = Number(document.getElementById("speed").value) || 1;
       const realSec = shiftDurationSecFromInput() / speed;
       document.getElementById("durationRealHint").textContent =
-        `≈ ${formatRealDuration(realSec)} reales a ${speed}x`;
+        `≈ ${formatRealDuration(realSec)} real at ${speed}x`;
     }
 
     document.getElementById("durationHours").addEventListener("input", updateDurationRealHint);
@@ -1664,7 +2418,8 @@
     document.getElementById("presentToggle").addEventListener("click", (e) => {
       const app = document.querySelector(".app");
       const isPresent = app.classList.toggle("present");
-      e.currentTarget.textContent = isPresent ? "🗂 Ver panel completo" : "🎤 Modo presentación";
+      e.currentTarget.title = isPresent ? "Show full panel" : "Presentation mode";
+      e.currentTarget.setAttribute("aria-label", e.currentTarget.title);
       e.currentTarget.classList.toggle("active", isPresent);
       // Leaflet no recalcula su tamaño solo: hay que avisarle tras el
       // cambio de layout, cuando el CSS ya terminó de aplicarse.
@@ -1681,15 +2436,30 @@
         drawZones(meta.flood_zones || []);
         drawAccidentHotspots(meta.accident_hotspots || []);
         map.setView([meta.depot.lat, meta.depot.lon], 13.6);
+        // La pastilla del encabezado reporta el estado del GRAFO; la
+        // pastilla de estado, el de la SESION. Antes las dos decian lo
+        // mismo al cargar y se leia como un dato repetido.
+        setGraphPill(meta.graph_ready);
         if (meta.graph_ready) {
-          if (!state.ws) setStatus("Grafo de Monterrey listo");
+          if (!state.ws) setStatus("Ready to simulate");
         } else {
-          if (!state.ws) setStatus("Cargando grafo de Monterrey en segundo plano…", "loading");
+          if (!state.ws) setStatus("Preparing…", "loading");
           setTimeout(loadMeta, 4000);
         }
       } catch (err) {
-        setStatus("No se pudo leer /meta", "error");
+        setStatus("Could not read /meta", "error");
       }
+    }
+
+    function setGraphPill(ready) {
+      const pill = document.getElementById("graphPill");
+      const label = document.getElementById("graphPillLabel");
+      if (!pill || !label) return;
+      pill.classList.toggle("ready", !!ready);
+      label.textContent = ready ? "Monterrey road graph" : "Loading road graph…";
+      pill.title = ready
+        ? "OpenStreetMap road network for downtown Monterrey, loaded"
+        : "Downloading the OpenStreetMap road network";
     }
 
     function setStatus(text, kind) {
@@ -1712,7 +2482,7 @@
           dashArray: "3 4",
           fillColor: "#FF4E68",
           fillOpacity: 0.045,
-        }).addTo(map).bindTooltip(`🌊 ${z.name} (histórico de inundación, severidad base ${z.base_severity})`)
+        }).addTo(map).bindTooltip(`Flood-prone: ${z.name} · base severity ${z.base_severity}`)
       );
     }
 
@@ -1730,7 +2500,7 @@
           opacity: 0.3,
           fillColor: "#A855F7",
           fillOpacity: 0.05,
-        }).addTo(map).bindTooltip(`🚧 ${z.name} — ${z.accident_count.toLocaleString("es-MX")} accidentes registrados (2017-2024)`)
+        }).addTo(map).bindTooltip(`Accident hotspot: ${z.name} — ${z.accident_count.toLocaleString("en-US")} recorded crashes (2017-2024)`)
       );
     }
 
@@ -1812,8 +2582,8 @@
       state.sessionReady = false;
       state.pendingEvent = null;
       state.orderDecisionStatus = {};
-      logEl.textContent = "Conectando…";
-      setStatus("Conectando y generando pedidos…", "loading");
+      logEl.textContent = "Connecting…";
+      setStatus("Connecting and generating orders…", "loading");
       document.getElementById("start").disabled = true;
       document.getElementById("stop").disabled = false;
       document.getElementById("raceAlphaLabel").textContent =
@@ -1838,12 +2608,15 @@
         }));
       };
       ws.onmessage = (ev) => handleMessage(JSON.parse(ev.data));
-      ws.onerror = () => setStatus("Error de WebSocket", "error");
+      ws.onerror = () => setStatus("WebSocket error", "error");
       ws.onclose = () => {
         document.getElementById("start").disabled = false;
         document.getElementById("stop").disabled = true;
-        if (statusEl.textContent.includes("Conectando") || statusEl.classList.contains("running")) {
-          setStatus("Sesión cerrada");
+        // Se compara contra la clase "loading", no contra el texto: al
+        // traducir la interfaz este `includes` seguia buscando la palabra
+        // en espanol y dejaba de detectar el estado de conexion.
+        if (statusEl.classList.contains("loading") || statusEl.classList.contains("running")) {
+          setStatus("Session closed");
         }
       };
     }
@@ -1869,7 +2642,7 @@
         // mensaje final con "esperando que inicie la sesión".
         if (!state.completed) {
           state.pendingEvent = eventMessage;
-          setStatus("Evento listo; esperando que inicie la sesión", "loading");
+          setStatus("Event queued; waiting for the session to start", "loading");
         }
         return;
       }
@@ -1884,13 +2657,13 @@
         state.speed = msg.config?.time_scale || Number(document.getElementById("speed").value);
         state.tickIntervalSec = msg.config?.tick_interval_sec || state.tickIntervalSec;
         state.orders = msg.orders || [];
-        document.getElementById("sessionLine").textContent = "sesión " + msg.session_id.slice(0, 8) + " · " + msg.total_orders + " pedidos";
+        document.getElementById("sessionLine").textContent = "session " + msg.session_id.slice(0, 8) + " · " + msg.total_orders + " orders";
         if (msg.depot) depotMarker.setLatLng([msg.depot.lat, msg.depot.lon]);
         if (msg.flood_zones) drawZones(msg.flood_zones);
         if (msg.accident_hotspots) drawAccidentHotspots(msg.accident_hotspots);
         drawOrders(state.orders);
-        document.getElementById("mapSummary").textContent = `${state.orders.length} pedidos · rutas por calles · turno compartido`;
-        setStatus("Turno en curso", "running");
+        document.getElementById("mapSummary").textContent = `${state.orders.length} orders · street-level routing · shared shift`;
+        setStatus("Shift running", "running");
         logEl.innerHTML = "";
         updateSimClock(0);
         applyRealWeather(msg.real_weather);
@@ -1902,11 +2675,11 @@
         applyTick(msg);
       } else if (msg.type === "event_ack") {
         showEvent(msg.event_type, msg.severity);
-        appendLog(`<span class="event">EVENTO ${msg.event_type} · severidad ${Number(msg.severity).toFixed(2)}</span>`);
+        appendLog(`<span class="event">EVENT ${msg.event_type} · severity ${Number(msg.severity).toFixed(2)}</span>`);
       } else if (msg.type === "session_complete") {
         state.completed = true;
         state.sessionReady = false;
-        setStatus("Turno completo — compara puntos y riesgo de ruta");
+        setStatus("Shift complete — compare points and route risk");
       } else if (msg.type === "error") {
         setStatus(msg.detail, "error");
       }
@@ -1937,7 +2710,7 @@
       if (agent.current && msg.pickup_reached && agent.pickupLoggedOrderId !== agent.current.order_id) {
         agent.pickupLoggedOrderId = agent.current.order_id;
         markOrderPoint(agent.current.order_id, "pickup", colorVar);
-        appendLog(`<span class="pickup ${key}">📦 ${msg.agent_name} recogió el pedido #${agent.current.order_id}</span>`);
+        appendLog(`<span class="pickup ${key}">${ICON.parcel} ${msg.agent_name} picked up order #${agent.current.order_id}</span>`);
       }
 
       // Entrega: el conteo de completados subió respecto al tick anterior.
@@ -1950,7 +2723,7 @@
         // si para cuando le tocó turno en la cola ya venció, se marca
         // distinto en vez de verse idéntico a una entrega puntual.
         const isLate = (shift.elapsed_sec || 0) > previousOrder.due_time_sec;
-        appendLog(`<span class="delivered ${key}${isLate ? " late" : ""}">${isLate ? "⏰" : "✅"} ${msg.agent_name} entregó${isLate ? " TARDE" : ""} el pedido #${previousOrder.order_id} <span class="fare">· ${Number(previousOrder.base_points).toFixed(1)} pts</span></span>`);
+        appendLog(`<span class="delivered ${key}${isLate ? " late" : ""}">${isLate ? ICON.clock : ICON.check} ${msg.agent_name} delivered${isLate ? " LATE" : ""} order #${previousOrder.order_id} <span class="fare">· ${Number(previousOrder.base_points).toFixed(1)} pts</span></span>`);
         const dropoffMarker = state.orderMarkers[previousOrder.order_id]?.dropoff;
         if (dropoffMarker) {
           const latlng = dropoffMarker.getLatLng();
@@ -1984,7 +2757,7 @@
       agent.remainingRoute = remainingRouteFrom(agent.route, agent.position);
       state.history[key].push({ t: agent.elapsed, y: agent.totalPoints });
       if (state.history[key].length > 240) state.history[key].shift();
-      document.getElementById("envLine").textContent = "Clima: " + agent.events.join(", ") + " · t=" + formatMin(agent.elapsed);
+      document.getElementById("envLine").textContent = "Weather: " + agent.events.join(", ") + " · t=" + formatMin(agent.elapsed);
       updateSimClock(agent.elapsed);
       renderKpis();
       drawCurrentRoutes();
@@ -1994,7 +2767,7 @@
         if (agent.seenDecisions.has(fingerprint)) return;
         agent.seenDecisions.add(fingerprint);
         const cls = d.timed_out ? "timeout" : d.accepted ? "accept" : "reject";
-        const verb = d.timed_out ? "TIMEOUT" : d.accepted ? "ACEPTA" : "RECHAZA";
+        const verb = d.timed_out ? "TIMEOUT" : d.accepted ? "ACCEPTS" : "REJECTS";
         const latencyMs = Number(d.decision_latency_ms ?? 0);
         const latencyClass = d.timed_out ? "timeout" : latencyMs > 120 ? "reject" : "";
         const latencyBadge = `<span class="latency ${latencyClass}">${latencyMs.toFixed(1)}ms</span>`;
@@ -2211,45 +2984,45 @@
     function showEvent(eventType, severity) {
       const banner = document.getElementById("eventBanner");
       const icons = {
-        HEAVY_RAIN: "🌧️", FLASH_FLOOD: "🌊", HEAVY_TRAFFIC: "🚗",
-        EXTREME_HEAT: "🔥", CLEAR: "☀️",
+        HEAVY_RAIN: ICON.rain, FLASH_FLOOD: ICON.flood, HEAVY_TRAFFIC: ICON.traffic,
+        EXTREME_HEAT: ICON.heat, CLEAR: ICON.sun,
       };
       const labels = {
-        HEAVY_RAIN: "Lluvia intensa",
-        FLASH_FLOOD: "Inundación",
-        HEAVY_TRAFFIC: "Tráfico pesado",
-        EXTREME_HEAT: "Calor extremo",
-        CLEAR: "Clima despejado",
+        HEAVY_RAIN: "Heavy rain",
+        FLASH_FLOOD: "Flash flood",
+        HEAVY_TRAFFIC: "Heavy traffic",
+        EXTREME_HEAT: "Extreme heat",
+        CLEAR: "Clear weather",
       };
       const classes = {
         HEAVY_RAIN: "rain", FLASH_FLOOD: "flood", HEAVY_TRAFFIC: "traffic",
         EXTREME_HEAT: "heat", CLEAR: "clear",
       };
-      document.getElementById("eventIcon").textContent = icons[eventType] || "⚠️";
+      document.getElementById("eventIcon").innerHTML = icons[eventType] || ICON.warning;
       document.getElementById("eventText").textContent =
-        `${labels[eventType] || eventType} activo · severidad ${Number(severity).toFixed(2)}`;
+        `${labels[eventType] || eventType} active · severity ${Number(severity).toFixed(2)}`;
       banner.className = "event-banner visible " + (classes[eventType] || "");
-      document.getElementById("envLine").textContent = `Clima: ${labels[eventType] || eventType} · severidad ${Number(severity).toFixed(2)}`;
+      document.getElementById("envLine").textContent = `Weather: ${labels[eventType] || eventType} · severity ${Number(severity).toFixed(2)}`;
       setWeather([eventType], severity);
       if (eventType === "CLEAR") window.setTimeout(() => banner.classList.remove("visible"), 2600);
     }
 
     // Clima REAL de Monterrey en el instante en que arrancó el turno
     // (Open-Meteo, ver weather_service.py) -- no un evento manual. Se
-    // muestra con su propia etiqueta ("🌐 clima real") para que quede
+    // muestra con su propia etiqueta ("Live weather") para que quede
     // claro que este dato sí viene de una fuente externa verificable, a
     // diferencia de los botones de "Evento sorpresa" (esos siguen siendo
     // manuales, y `showEvent` los sigue manejando igual que siempre).
     function applyRealWeather(realWeather) {
       const line = document.getElementById("realWeatherLine");
       if (!realWeather) {
-        line.textContent = "🌐 Clima real: no se pudo consultar Open-Meteo, turno arrancó despejado.";
+        line.textContent = "Live weather: Open-Meteo unavailable, the shift started clear.";
         return;
       }
       const { event_type, severity, temperature_c, description, source } = realWeather;
-      line.textContent = `🌐 Clima real al arrancar (${source}): ${description}, ${temperature_c.toFixed(1)}°C` +
-        (event_type !== "CLEAR" ? ` · severidad aplicada ${Number(severity).toFixed(2)}` : "");
-      appendLog(`<span class="event real-weather">🌐 Clima real detectado: ${description} (${temperature_c.toFixed(1)}°C) · fuente: ${source}</span>`);
+      line.textContent = `Live weather at start (${source}): ${description}, ${temperature_c.toFixed(1)}°C` +
+        (event_type !== "CLEAR" ? ` · applied severity ${Number(severity).toFixed(2)}` : "");
+      appendLog(`<span class="event real-weather">${ICON.globe} Live weather detected: ${description} (${temperature_c.toFixed(1)}°C) · source: ${source}</span>`);
       if (event_type !== "CLEAR") {
         showEvent(event_type, severity);
       }
@@ -2266,17 +3039,17 @@
           timeouts: String(a.timeouts),
         };
         document.getElementById("kpis-" + key).innerHTML = [
-          kpi(values.points, "Puntos totales", values.points !== a.prevKpi.points, "kpi-hero"),
-          kpi(values.completed, "Entregados", values.completed !== a.prevKpi.completed),
-          kpi(values.late, "Tarde", values.late !== a.prevKpi.late),
-          kpi(values.lost, "No cobrados", values.lost !== a.prevKpi.lost),
+          kpi(values.points, "Total points", values.points !== a.prevKpi.points, "kpi-hero"),
+          kpi(values.completed, "Delivered", values.completed !== a.prevKpi.completed),
+          kpi(values.late, "Late", values.late !== a.prevKpi.late),
+          kpi(values.lost, "Uncollected", values.lost !== a.prevKpi.lost),
           kpi(values.timeouts, "Timeouts 200ms", values.timeouts !== a.prevKpi.timeouts),
         ].join("");
         a.prevKpi = values;
         const cur = a.current;
         document.getElementById("cur-" + key).textContent = cur
-          ? `Entregando #${cur.order_id} · ${cur.base_points} pts · ${cur.straight_line_distance_km} km`
-          : (a.active ? `${a.active} pedidos en cola` : "Sin pedido en curso");
+          ? `Delivering #${cur.order_id} · ${cur.base_points} pts · ${cur.straight_line_distance_km} km`
+          : (a.active ? `${a.active} orders queued` : "No order in progress");
       });
       updateRaceBar();
       updateImpactPanel();
@@ -2349,8 +3122,8 @@
         ? gAccidentCostPerHour - sAccidentCostPerHour
         : null;
 
-      const fmtPtsHour = (value) => value === null ? "—" : value.toLocaleString("es-MX", { maximumFractionDigits: 1 }) + " pts/h";
-      const fmtMxnHour = (value) => value === null ? "—" : "$" + value.toLocaleString("es-MX", { maximumFractionDigits: 1 }) + "/h";
+      const fmtPtsHour = (value) => value === null ? "—" : value.toLocaleString("en-US", { maximumFractionDigits: 1 }) + " pts/h";
+      const fmtMxnHour = (value) => value === null ? "—" : "$" + value.toLocaleString("en-US", { maximumFractionDigits: 1 }) + "/h";
       document.getElementById("impactEarnHourGreedy").textContent = fmtPtsHour(gPointsPerHour);
       document.getElementById("impactEarnHourSmart").textContent = fmtPtsHour(sPointsPerHour);
       document.getElementById("impactSavingsHourGreedy").textContent = fmtMxnHour(gAccidentCostPerHour);
@@ -2358,30 +3131,30 @@
 
       const parts = [];
       if (riskReductionFrac !== null) {
-        parts.push(`Risk-averse recorre rutas con ${(riskReductionFrac * 100).toFixed(0)}% menos riesgo promedio que Greedy, para las mismas entregas`);
+        parts.push(`Risk-averse drives routes with ${(riskReductionFrac * 100).toFixed(0)}% less average risk than Greedy, for the same deliveries`);
       }
       if (g.riskyHandled > 0 || s.riskyHandled > 0) {
-        parts.push(`Greedy entregó ${g.riskyHandled} pedido${g.riskyHandled === 1 ? "" : "s"} por rutas de alto riesgo, contra ${s.riskyHandled} de Risk-averse`);
+        parts.push(`Greedy delivered ${g.riskyHandled} order${g.riskyHandled === 1 ? "" : "s"} through high-risk routes, against ${s.riskyHandled} for Risk-averse`);
       }
       if (g.pointsLostTimeout > 0 || s.pointsLostTimeout > 0) {
-        parts.push(`puntos no cobrados por falta de tiempo: ${g.pointsLostTimeout.toFixed(0)} (Greedy) vs ${s.pointsLostTimeout.toFixed(0)} (Risk-averse)`);
+        parts.push(`points left uncollected for lack of time: ${g.pointsLostTimeout.toFixed(0)} (Greedy) vs ${s.pointsLostTimeout.toFixed(0)} (Risk-averse)`);
       }
       if (preventionSavingsPerHour !== null && preventionSavingsPerHour > 0.01) {
-        parts.push(`por cada hora trabajada, reduce ~$${preventionSavingsPerHour.toFixed(1)} MXN el costo esperado por accidentes frente a Greedy (supuestos: $${costPerIncident.toLocaleString("es-MX")}/incidente, ${accidentRatePer1000h}/1,000h de incidencia base)`);
+        parts.push(`for every hour worked, it cuts the expected accident cost by ~$${preventionSavingsPerHour.toFixed(1)} MXN against Greedy (assumptions: $${costPerIncident.toLocaleString("en-US")}/incident, ${accidentRatePer1000h}/1,000h baseline incidence)`);
       }
       summaryEl.textContent = parts.length
         ? parts.join(" · ") + "."
-        : "Corre un turno (idealmente con un evento de clima activo) para ver el impacto en vivo.";
+        : "Run a shift (ideally with an active weather event) to see the live impact.";
 
       // Adelanto de una línea visible en el título aunque el panel esté
       // colapsado -- así no hace falta desplegarlo solo para chismosear
       // si ya hay algo que mostrar.
       const hintEl = document.getElementById("impactToggleHint");
       if (gRisk === null && sRisk === null) {
-        hintEl.textContent = "— corre un turno para verlo";
+        hintEl.textContent = "— run a shift to see it";
       } else if (gRisk !== null && sRisk !== null && gRisk > 0) {
         const reduction = Math.max(((gRisk - sRisk) / gRisk) * 100, 0);
-        hintEl.textContent = `— ${reduction.toFixed(0)}% menos riesgo en ruta`;
+        hintEl.textContent = `— ${reduction.toFixed(0)}% less route risk`;
       } else {
         hintEl.textContent = "";
       }
@@ -2414,7 +3187,7 @@
     function updateSimClock(elapsedSec) {
       const speed = state.speed || Number(document.getElementById("speed").value) || 1;
       document.getElementById("simClock").textContent = formatClock(elapsedSec);
-      document.getElementById("simClockMeta").textContent = `hora simulada · ${formatMin(elapsedSec)} transcurridos · velocidad ${speed}x`;
+      document.getElementById("simClockMeta").textContent = `simulated time · ${formatMin(elapsedSec)} elapsed · speed ${speed}x`;
       updateShiftProgress(elapsedSec);
     }
 
@@ -2468,7 +3241,7 @@
         ctx.fillStyle = "#5F6E88";
         ctx.font = "11px 'IBM Plex Mono', monospace";
         ctx.textAlign = "center";
-        ctx.fillText("esperando el primer tick…", w / 2, h / 2 + 4);
+        ctx.fillText("waiting for the first tick…", w / 2, h / 2 + 4);
         return;
       }
 

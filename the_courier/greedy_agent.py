@@ -88,9 +88,9 @@ class GreedyAgent(BaseAgent):
         estimated_bonus = risk_bonus_points(weighted_risk)
 
         reasoning = (
-            f"Aceptado (aceptación obligatoria): {points_per_minute:.2f} pts/min, "
-            f"riesgo de ruta {weighted_risk:.2f} ignorado por diseño (alpha=0) -- "
-            f"bonus de riesgo estimado {estimated_bonus:.1f} pts."
+            f"Accepted (mandatory acceptance): {points_per_minute:.2f} pts/min, "
+            f"route risk {weighted_risk:.2f} ignored by design (alpha=0) -- "
+            f"estimated risk bonus {estimated_bonus:.1f} pts."
         )
 
         return AgentDecision(
